@@ -11,20 +11,20 @@ type Vars interface {
 
 // Pagination vars are used for paginating results from the API.
 type PaginationVars struct {
-	Page  string `json:"page"`
-	Limit uint   `json:"limit"`
+	Page    string `json:"page"`
+	PerPage uint   `json:"perPage"`
 }
 
-func NewPaginationVars(page string, limit uint) *PaginationVars {
+func NewPaginationVars(page string, perPage uint) *PaginationVars {
 	return &PaginationVars{
-		Page:  page,
-		Limit: limit,
+		Page:    page,
+		PerPage: perPage,
 	}
 }
 
 func (p *PaginationVars) Apply(params *url.Values) {
-	if p.Limit > 0 {
-		params.Add("limit", fmt.Sprintf("%d", p.Limit))
+	if p.PerPage > 0 {
+		params.Add("perPage", fmt.Sprintf("%d", p.PerPage))
 	}
 }
 
@@ -41,7 +41,7 @@ func (c *CommonVars) Apply(params *url.Values) {
 func WithIncludeAdminVar() Vars {
 	return &CommonVars{
 		Vars: map[string]string{
-			"includeAdmin": "true",
+			"includeGroupAdmins": "true",
 		},
 	}
 }

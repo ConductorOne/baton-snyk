@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	BaseHost = "snyk.io/api/v1"
+	BaseHost = "api.snyk.io/v1"
 
 	GroupEndpoint        = "/group/%s"
 	GroupMembersEndpoint = "/members"
@@ -80,6 +80,37 @@ func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	}
 
 	return users, nil
+}
+
+func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
+	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	// use the orgs endpoint to get the group details - ignoring list of orgs
+	var group Group
+	_, err = c.Get(ctx, c.prepareURL(path), &group, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}
+
+func (c *Client) ListRolesInOrgs(ctx context.Context) ([]Role, error) {
+	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupRolesEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	var roles []Role
+	_, err = c.Get(ctx, c.prepareURL(path), &roles, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return roles, nil
 }
 
 func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, string, error) {

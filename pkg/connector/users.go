@@ -19,7 +19,7 @@ func (u *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return userResourceType
 }
 
-func userResource(ctx context.Context, user *snyk.GroupUser) (*v2.Resource, error) {
+func userResource(ctx context.Context, user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": user.Name,
 		"email":       user.Email,
@@ -33,6 +33,7 @@ func userResource(ctx context.Context, user *snyk.GroupUser) (*v2.Resource, erro
 		[]rs.UserTraitOption{
 			rs.WithUserProfile(profile),
 		},
+		rs.WithParentResourceID(parentID),
 	)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func (u *userBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	var rv []*v2.Resource
 	for _, user := range users {
 		uCopy := user
-		resource, err := userResource(ctx, &uCopy)
+		resource, err := userResource(ctx, &uCopy, parentResourceID)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource: %w", err)
 		}

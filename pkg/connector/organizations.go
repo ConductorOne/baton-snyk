@@ -3,13 +3,18 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
 )
+
+const OrgMemberEntitlement = "member"
 
 type orgBuilder struct {
 	client *snyk.Client
@@ -85,13 +90,68 @@ func (o *orgBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, 
 }
 
 // Entitlements always returns an empty slice for orgs.
-func (o *orgBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+	var rv []*v2.Entitlement
+
+	// membership entitlements
+	assignmentOptions := []ent.EntitlementOption{
+		ent.WithGrantableTo(userResourceType),
+		ent.WithDisplayName(fmt.Sprintf("%s %s", resource.DisplayName, OrgMemberEntitlement)),
+		ent.WithDescription(fmt.Sprintf("Member of the %s group", resource.DisplayName)),
+	}
+
+	rv = append(rv, ent.NewAssignmentEntitlement(resource, OrgMemberEntitlement, assignmentOptions...))
+
+	// permission entitlements - could contain custom roles
+	roles, err := o.client.ListRolesInOrgs(ctx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("failed to list roles in group: %w", err)
+	}
+
+	for _, role := range roles {
+		permissionOptions := []ent.EntitlementOption{
+			ent.WithGrantableTo(userResourceType),
+			ent.WithDisplayName(fmt.Sprintf("%s - %s", role.Name, role.Description)),
+			ent.WithDescription(role.Description),
+		}
+
+		var roleName string
+		_, err := fmt.Sscanf(role.Name, "Org %s", &roleName)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("failed to parse role name: %w", err)
+		}
+
+		roleName = strings.ToLower(roleName)
+
+		rv = append(rv, ent.NewPermissionEntitlement(resource, roleName, permissionOptions...))
+	}
+
+	return rv, "", nil, nil
 }
 
 // Grants always returns an empty slice for orgs since they don't have any entitlements.
 func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
-	return nil, "", nil, nil
+	var rv []*v2.Grant
+
+	members, err := o.client.ListUsersInOrg(ctx, resource.Id.Resource)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
+	}
+
+	for _, member := range members {
+		userId, err := rs.NewResourceID(userResourceType, member.ID)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource id: %w", err)
+		}
+
+		// membership grants
+		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userId))
+
+		// permission grants
+		rv = append(rv, grant.NewGrant(resource, member.Role, userId))
+	}
+
+	return rv, "", nil, nil
 }
 
 func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
