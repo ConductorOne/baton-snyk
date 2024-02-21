@@ -45,4 +45,6 @@ type Role struct {
 	Description string `json:"description"`
 	Created     string `json:"created"`
 	Modified    string `json:"modified"`
+	Slug        string
+	Type        string
 }

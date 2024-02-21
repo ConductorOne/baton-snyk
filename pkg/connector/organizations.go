@@ -3,7 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
-	"strings"
+	"slices"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -103,7 +103,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 	rv = append(rv, ent.NewAssignmentEntitlement(resource, OrgMemberEntitlement, assignmentOptions...))
 
 	// permission entitlements - could contain custom roles
-	roles, err := o.client.ListRolesInOrgs(ctx)
+	roles, err := o.client.ListOrgRoles(ctx)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("failed to list roles in group: %w", err)
 	}
@@ -111,19 +111,11 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 	for _, role := range roles {
 		permissionOptions := []ent.EntitlementOption{
 			ent.WithGrantableTo(userResourceType),
-			ent.WithDisplayName(fmt.Sprintf("%s - %s", role.Name, role.Description)),
+			ent.WithDisplayName(role.Name),
 			ent.WithDescription(role.Description),
 		}
 
-		var roleName string
-		_, err := fmt.Sscanf(role.Name, "Org %s", &roleName)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("failed to parse role name: %w", err)
-		}
-
-		roleName = strings.ToLower(roleName)
-
-		rv = append(rv, ent.NewPermissionEntitlement(resource, roleName, permissionOptions...))
+		rv = append(rv, ent.NewPermissionEntitlement(resource, role.ID, permissionOptions...))
 	}
 
 	return rv, "", nil, nil
@@ -147,8 +139,22 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 		// membership grants
 		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userId))
 
-		// permission grants
-		rv = append(rv, grant.NewGrant(resource, member.Role, userId))
+		// permission grants - require finding role public id to match with entitlement
+		roles, err := o.client.ListOrgRoles(ctx)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+		}
+
+		// check if the role is a valid role
+		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+			return r.Slug == member.Role
+		})
+
+		if rI == -1 {
+			return nil, "", nil, fmt.Errorf("snyk-connector: role %s not found", member.Role)
+		}
+
+		rv = append(rv, grant.NewGrant(resource, roles[rI].ID, userId))
 	}
 
 	return rv, "", nil, nil

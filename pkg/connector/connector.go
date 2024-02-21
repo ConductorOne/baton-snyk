@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -35,14 +36,19 @@ func (s *Snyk) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCl
 // Metadata returns metadata about the connector.
 func (s *Snyk) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 	return &v2.ConnectorMetadata{
-		DisplayName: "My Baton Connector",
-		Description: "The template implementation of a baton connector",
+		DisplayName: "Snyk",
+		Description: "Connector syncing Snyk parent group and its organizations and users to Baton",
 	}, nil
 }
 
 // Validate is called to ensure that the connector is properly configured. It should exercise any API credentials
 // to be sure that they are valid.
 func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
+	_, err := s.client.GetGroupDetails(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to validate credentials for group %s: %w", s.GroupID, err)
+	}
+
 	return nil, nil
 }
 

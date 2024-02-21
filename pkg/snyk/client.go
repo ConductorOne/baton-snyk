@@ -59,7 +59,7 @@ func (c *Client) ListUsersInOrg(ctx context.Context, orgID string) ([]OrgUser, e
 	}
 
 	var users []OrgUser
-	_, err = c.Get(ctx, c.prepareURL(path), &users, []Vars{WithIncludeAdminVar()})
+	_, err = c.get(ctx, c.prepareURL(path), &users, []Vars{WithIncludeAdminVar()})
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	}
 
 	var users []GroupUser
-	_, err = c.Get(ctx, c.prepareURL(path), &users, nil)
+	_, err = c.get(ctx, c.prepareURL(path), &users, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
 
 	// use the orgs endpoint to get the group details - ignoring list of orgs
 	var group Group
-	_, err = c.Get(ctx, c.prepareURL(path), &group, nil)
+	_, err = c.get(ctx, c.prepareURL(path), &group, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -98,19 +98,56 @@ func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
 	return &group, nil
 }
 
-func (c *Client) ListRolesInOrgs(ctx context.Context) ([]Role, error) {
+const (
+	OrgRoleType   = "org"
+	GroupRoleType = "group"
+)
+
+func (c *Client) parseRole(role *Role) error {
+	name := strings.ToLower(role.Name)
+
+	if _, err := fmt.Sscanf(name, "%s %s", &role.Type, &role.Slug); err != nil {
+		return fmt.Errorf("failed to parse role name and type: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Client) filterRoles(roles []Role, roleType string) ([]Role, error) {
+	var filteredRoles []Role
+	for _, r := range roles {
+		err := c.parseRole(&r)
+		if err != nil {
+			return nil, err
+		}
+
+		if r.Type == roleType {
+			filteredRoles = append(filteredRoles, r)
+		}
+	}
+
+	return filteredRoles, nil
+}
+
+func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupRolesEndpoint)
 	if err != nil {
 		return nil, err
 	}
 
 	var roles []Role
-	_, err = c.Get(ctx, c.prepareURL(path), &roles, nil)
+	_, err = c.get(ctx, c.prepareURL(path), &roles, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return roles, nil
+	// filter the roles to only include org roles
+	orgRoles, err := c.filterRoles(roles, OrgRoleType)
+	if err != nil {
+		return nil, err
+	}
+
+	return orgRoles, nil
 }
 
 func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, string, error) {
@@ -133,7 +170,7 @@ func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, s
 	var res struct {
 		Orgs []Org `json:"orgs"`
 	}
-	link, err := c.Get(ctx, urlAddress, &res, []Vars{pgVars})
+	link, err := c.get(ctx, urlAddress, &res, []Vars{pgVars})
 	if err != nil {
 		return nil, "", err
 	}
@@ -141,11 +178,11 @@ func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, s
 	return res.Orgs, link, nil
 }
 
-func (c *Client) Get(ctx context.Context, urlAddress *url.URL, response interface{}, vars []Vars) (string, error) {
+func (c *Client) get(ctx context.Context, urlAddress *url.URL, response interface{}, vars []Vars) (string, error) {
 	return c.doRequest(ctx, urlAddress, http.MethodGet, nil, response, vars)
 }
 
-func (c *Client) Put(ctx context.Context, urlAddress *url.URL, body io.Reader, response interface{}, vars []Vars) (string, error) {
+func (c *Client) put(ctx context.Context, urlAddress *url.URL, body io.Reader, response interface{}, vars []Vars) (string, error) {
 	return c.doRequest(ctx, urlAddress, http.MethodPut, body, response, vars)
 }
 
