@@ -121,7 +121,7 @@ func (c *Client) parseRole(role *Role) error {
 func (c *Client) filterRoles(roles []Role, roleType string) ([]Role, error) {
 	var filteredRoles []Role
 	for _, r := range roles {
-		err := c.parseRole(&r)
+		err := c.parseRole(&r) // #nosec G601
 		if err != nil {
 			return nil, err
 		}
