@@ -108,6 +108,7 @@ const (
 	GroupRoleType = "group"
 )
 
+// parseRole extracts the role type and slug from the role name.
 func (c *Client) parseRole(role *Role) error {
 	name := strings.ToLower(role.Name)
 
@@ -118,6 +119,8 @@ func (c *Client) parseRole(role *Role) error {
 	return nil
 }
 
+// filterRoles returns a list of roles that match the given role type.
+// To properly filter the roles, we parse the role name to extract the role type and slug.
 func (c *Client) filterRoles(roles []Role, roleType string) ([]Role, error) {
 	var filteredRoles []Role
 	for _, r := range roles {

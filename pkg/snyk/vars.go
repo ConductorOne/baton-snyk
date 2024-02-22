@@ -10,6 +10,7 @@ type Vars interface {
 }
 
 // Pagination vars are used for paginating results from the API.
+// Page represents parsed Link header from the response with the next page URL.
 type PaginationVars struct {
 	Page    string `json:"page"`
 	PerPage uint   `json:"perPage"`

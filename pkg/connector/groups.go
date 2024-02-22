@@ -77,6 +77,7 @@ func (g *groupBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId
 	return rv, "", nil, nil
 }
 
+// Entitlements returns all default permission entitlements for a group.
 func (g *groupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
@@ -93,6 +94,7 @@ func (g *groupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, 
 	return rv, "", nil, nil
 }
 
+// Grants returns all the permission grants for a group.
 func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var rv []*v2.Grant
 

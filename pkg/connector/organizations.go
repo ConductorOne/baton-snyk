@@ -95,7 +95,7 @@ func (o *orgBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, 
 	return rv, nextToken, nil, nil
 }
 
-// Entitlements always returns an empty slice for orgs.
+// Entitlements returns slice of membership and permission entitlements for the org.
 func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
@@ -127,7 +127,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 	return rv, "", nil, nil
 }
 
-// Grants always returns an empty slice for orgs since they don't have any entitlements.
+// Grants returns slice of membership and permission grants for the org.
 func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var rv []*v2.Grant
 

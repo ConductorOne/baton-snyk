@@ -33,6 +33,7 @@ func parsePageToken(i string, resourceID *v2.ResourceId) (*pagination.Bag, strin
 	return b, b.PageToken(), nil
 }
 
+// parseLink returns parsed header representing next page in paginated response.
 func parseLink(link string) string {
 	parts := strings.Split(link, ";")
 	url := strings.Trim(parts[0], "<>")
