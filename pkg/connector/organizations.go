@@ -12,9 +12,15 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
-const OrgMemberEntitlement = "member"
+const (
+	OrgMemberEntitlement       = "member"
+	OrgAdminEntitlement        = "admin"
+	OrgCollaboratorEntitlement = "collaborator"
+)
 
 type orgBuilder struct {
 	client *snyk.Client
@@ -161,10 +167,95 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 }
 
 func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	if principal.Id.ResourceType != userResourceType.Id {
+		l.Debug(
+			"snyk-connector: only users can be granted organization entitlements",
+			zap.String("principal_id", principal.Id.String()),
+			zap.String("principal_type", principal.Id.ResourceType),
+		)
+
+		return nil, fmt.Errorf("snyk-connector: only users can be granted organization entitlements")
+	}
+
+	if entitlement.Slug == OrgMemberEntitlement {
+		err := o.client.AddOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
+		if err != nil {
+			return nil, fmt.Errorf("snyk-connector: failed to add user to org: %w", err)
+		}
+
+		return nil, nil
+	} else {
+		err := o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, entitlement.Slug)
+		if err != nil {
+			return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
+		}
+	}
+
 	return nil, nil
 }
 
 func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
+
+	principal := grant.Principal
+	entitlement := grant.Entitlement
+
+	if principal.Id.ResourceType != userResourceType.Id {
+		l.Debug(
+			"snyk-connector: only users can have organization entitlements revoked",
+			zap.String("principal_id", principal.Id.String()),
+			zap.String("principal_type", principal.Id.ResourceType),
+		)
+
+		return nil, fmt.Errorf("snyk-connector: only users can have organization entitlements revoked")
+	}
+
+	if entitlement.Slug == OrgMemberEntitlement {
+		err := o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
+		if err != nil {
+			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
+		}
+	} else {
+		rolePublicID := entitlement.Slug
+		roles, err := o.client.ListOrgRoles(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+		}
+
+		// check if the role is a valid role
+		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+			return r.ID == rolePublicID
+		})
+		if rI == -1 {
+			return nil, fmt.Errorf("snyk-connector: role %s not found", rolePublicID)
+		}
+
+		// find minimal default role collaborator
+		cI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+			return r.Slug == OrgCollaboratorEntitlement
+		})
+		if cI == -1 {
+			return nil, fmt.Errorf("snyk-connector: minimal default role %s not found", OrgCollaboratorEntitlement)
+		}
+
+		collaborator := roles[cI]
+		if rolePublicID == collaborator.ID {
+			// if we're revoking collaborator role - remove from org
+			err = o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
+			if err != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
+			}
+		} else {
+			// if we're revoking admin or other role - rollback to minimal role collaborator
+			err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, collaborator.ID)
+			if err != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
+			}
+		}
+	}
+
 	return nil, nil
 }
 

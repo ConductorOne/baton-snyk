@@ -1,6 +1,7 @@
 package snyk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,15 +14,19 @@ import (
 const (
 	BaseHost = "api.snyk.io/v1"
 
-	GroupEndpoint        = "/group/%s"
-	GroupMembersEndpoint = "/members"
-	GroupOrgsEndpoint    = "/orgs"
-	GroupRolesEndpoint   = "/roles"
+	GroupEndpoint         = "/group/%s"
+	GroupMembersEndpoint  = "/members"
+	GroupOrgsEndpoint     = "/orgs"
+	GroupRolesEndpoint    = "/roles"
+	OrgUserUpdateEndpoint = "/update/%s"
 
 	OrgEndpoint        = "/org/%s"
 	OrgMembersEndpoint = "/members"
 
 	CurrentUserOrgsEndpoint = "/orgs"
+
+	OrgAdminRole        = "admin"
+	OrgCollaboratorRole = "collaborator"
 )
 
 type Client struct {
@@ -150,6 +155,66 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	return orgRoles, nil
 }
 
+type AddMemberBody struct {
+	UserId string `json:"userId"`
+	Role   string `json:"role"`
+}
+
+func (c *Client) AddOrgMember(ctx context.Context, userID, orgID string) error {
+	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint)
+	if err != nil {
+		return err
+	}
+
+	body := &AddMemberBody{
+		UserId: userID,
+		Role:   OrgCollaboratorRole,
+	}
+
+	_, err = c.post(ctx, c.prepareURL(path), body)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) RemoveOrgMember(ctx context.Context, userID, orgID string) error {
+	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint, userID)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.delete(ctx, c.prepareURL(path))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type UpdateRoleBody struct {
+	RoleID string `json:"rolePublicId"`
+}
+
+func (c *Client) UpdateOrgRole(ctx context.Context, userID, orgID, roleID string) error {
+	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint, fmt.Sprintf(OrgUserUpdateEndpoint, userID))
+	if err != nil {
+		return err
+	}
+
+	body := &UpdateRoleBody{
+		RoleID: roleID,
+	}
+
+	_, err = c.put(ctx, c.prepareURL(path), body)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, string, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
 	if err != nil {
@@ -182,8 +247,16 @@ func (c *Client) get(ctx context.Context, urlAddress *url.URL, response interfac
 	return c.doRequest(ctx, urlAddress, http.MethodGet, nil, response, vars)
 }
 
-func (c *Client) put(ctx context.Context, urlAddress *url.URL, body io.Reader, response interface{}, vars []Vars) (string, error) {
-	return c.doRequest(ctx, urlAddress, http.MethodPut, body, response, vars)
+func (c *Client) post(ctx context.Context, urlAddress *url.URL, body interface{}) (string, error) {
+	return c.doRequest(ctx, urlAddress, http.MethodPost, body, nil, nil)
+}
+
+func (c *Client) put(ctx context.Context, urlAddress *url.URL, body interface{}) (string, error) {
+	return c.doRequest(ctx, urlAddress, http.MethodPut, body, nil, nil)
+}
+
+func (c *Client) delete(ctx context.Context, urlAddress *url.URL) (string, error) {
+	return c.doRequest(ctx, urlAddress, http.MethodDelete, nil, nil, nil)
 }
 
 func checkContentType(contentType string) error {
@@ -215,10 +288,20 @@ func parseJSON(body io.Reader, contentType string, res interface{}) error {
 	return nil
 }
 
-func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method string, body io.Reader, response interface{}, vars []Vars) (string, error) {
+func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method string, data interface{}, response interface{}, vars []Vars) (string, error) {
 	u, err := url.PathUnescape(urlAddress.String())
 	if err != nil {
 		return "", err
+	}
+
+	var body io.Reader
+	if data != nil {
+		jb, err := json.Marshal(data)
+		if err != nil {
+			return "", err
+		}
+
+		body = bytes.NewReader(jb)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, u, body)
