@@ -31,7 +31,7 @@ func validateConfig(ctx context.Context, cfg *config) error {
 }
 
 func cmdFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().String("api-token", "", "API token for the Snyk API. ($BATON_API_TOKEN)")
-	cmd.PersistentFlags().String("group-id", "", "Group ID for the Snyk API. ($BATON_GROUP_ID)")
-	cmd.PersistentFlags().StringSlice("org-ids", nil, "Limit syncing to specific orgs. ($BATON_ORG_IDS)")
+	cmd.PersistentFlags().String("api-token", "", "API token representing user or service account, used to authenticate with Snyk API. ($BATON_API_TOKEN)")
+	cmd.PersistentFlags().String("group-id", "", "Snyk group ID to scope the synchronization. ($BATON_GROUP_ID)")
+	cmd.PersistentFlags().StringSlice("org-ids", nil, "Limit syncing to specified organizations. ($BATON_ORG_IDS)")
 }
