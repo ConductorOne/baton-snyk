@@ -43,7 +43,6 @@ func userResource(ctx context.Context, user *snyk.GroupUser, parentID *v2.Resour
 }
 
 // List returns all the users from the database as resource objects.
-// Users include a UserTrait because they are the 'shape' of a standard user.
 func (u *userBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, _ *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	if parentResourceID == nil {
 		return nil, "", nil, nil

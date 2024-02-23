@@ -10,6 +10,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Snyk struct {
@@ -46,7 +48,7 @@ func (s *Snyk) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 	_, err := s.client.GetGroupDetails(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("snyk-connector: failed to validate credentials for group %s: %w", s.GroupID, err)
+		return nil, status.Error(codes.Unauthenticated, fmt.Sprintf("snyk-connector: failed to validate credentials for group %s", s.GroupID))
 	}
 
 	return nil, nil

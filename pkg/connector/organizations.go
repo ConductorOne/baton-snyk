@@ -86,7 +86,10 @@ func (o *orgBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, 
 		rv = append(rv, resource)
 	}
 
-	nextPage := parseLink(nextPageLink)
+	nextPage, err := parseLink(nextPageLink)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse link: %w", err)
+	}
 	nextToken, err := bag.NextToken(nextPage)
 	if err != nil {
 		return nil, "", nil, err
@@ -136,6 +139,12 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
 	}
 
+	// permission grants - require finding role public id to match with entitlement
+	roles, err := o.client.ListOrgRoles(ctx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+	}
+
 	for _, member := range members {
 		userId, err := rs.NewResourceID(userResourceType, member.ID)
 		if err != nil {
@@ -144,12 +153,6 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 
 		// membership grants
 		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userId))
-
-		// permission grants - require finding role public id to match with entitlement
-		roles, err := o.client.ListOrgRoles(ctx)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
-		}
 
 		// check if the role is a valid role
 		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
