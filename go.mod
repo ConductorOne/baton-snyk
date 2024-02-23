@@ -7,6 +7,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/spf13/cobra v1.8.0
 	go.uber.org/zap v1.27.0
+	google.golang.org/grpc v1.62.0
 )
 
 require (
@@ -14,10 +15,10 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.25.1 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.1 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.27.2 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.2 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.27.3 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.15.1 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.4 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.5 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
@@ -26,10 +27,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.50.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.19.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.22.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.27.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.20.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.28.0 // indirect
 	github.com/aws/smithy-go v1.20.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/doug-martin/goqu/v9 v9.19.0 // indirect
@@ -71,7 +72,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.3.0 // indirect
 	golang.org/x/crypto v0.19.0 // indirect
-	golang.org/x/exp v0.0.0-20240213143201-ec583247a57a // indirect
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/oauth2 v0.17.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
@@ -79,7 +80,6 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240221002015-b0ce06bbee7c // indirect
-	google.golang.org/grpc v1.62.0 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
