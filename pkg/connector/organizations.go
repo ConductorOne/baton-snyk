@@ -106,7 +106,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 	assignmentOptions := []ent.EntitlementOption{
 		ent.WithGrantableTo(userResourceType),
 		ent.WithDisplayName(fmt.Sprintf("%s %s", resource.DisplayName, OrgMemberEntitlement)),
-		ent.WithDescription(fmt.Sprintf("Member of the %s group", resource.DisplayName)),
+		ent.WithDescription(fmt.Sprintf("Member of the %s organization", resource.DisplayName)),
 	}
 
 	rv = append(rv, ent.NewAssignmentEntitlement(resource, OrgMemberEntitlement, assignmentOptions...))
@@ -114,7 +114,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 	// permission entitlements - could contain custom roles
 	roles, err := o.client.ListOrgRoles(ctx)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("failed to list roles in group: %w", err)
+		return nil, "", nil, fmt.Errorf("failed to list roles in organization: %w", err)
 	}
 
 	for _, role := range roles {
