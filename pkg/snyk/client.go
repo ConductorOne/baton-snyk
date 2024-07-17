@@ -113,7 +113,7 @@ func (c *Client) parseRole(role *Role) error {
 	name := strings.ToLower(role.Name)
 
 	if _, err := fmt.Sscanf(name, "%s %s", &role.Type, &role.Slug); err != nil {
-		return fmt.Errorf("failed to parse role name and type: %w", err)
+		return fmt.Errorf("failed to parse role name and type for '%v': %w", name, err)
 	}
 
 	return nil
