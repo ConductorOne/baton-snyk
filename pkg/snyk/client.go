@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 const (
@@ -121,12 +124,15 @@ func (c *Client) parseRole(role *Role) error {
 
 // filterRoles returns a list of roles that match the given role type.
 // To properly filter the roles, we parse the role name to extract the role type and slug.
-func (c *Client) filterRoles(roles []Role, roleType string) ([]Role, error) {
+func (c *Client) filterRoles(ctx context.Context, roles []Role, roleType string) ([]Role, error) {
+	l := ctxzap.Extract(ctx)
 	var filteredRoles []Role
 	for _, r := range roles {
 		err := c.parseRole(&r) // #nosec G601
 		if err != nil {
-			return nil, err
+			// Snyk accounts can have role names of any kind, but org roles start with "Org "
+			l.Error("filterRoles", zap.Error(err))
+			continue
 		}
 
 		if r.Type == roleType {
@@ -150,7 +156,7 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	}
 
 	// filter the roles to only include org roles
-	orgRoles, err := c.filterRoles(roles, OrgRoleType)
+	orgRoles, err := c.filterRoles(ctx, roles, OrgRoleType)
 	if err != nil {
 		return nil, err
 	}
