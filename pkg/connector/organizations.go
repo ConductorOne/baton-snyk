@@ -132,6 +132,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 
 // Grants returns slice of membership and permission grants for the org.
 func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
 
 	members, err := o.client.ListUsersInOrg(ctx, resource.Id.Resource)
@@ -160,7 +161,8 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 		})
 
 		if rI == -1 {
-			return nil, "", nil, fmt.Errorf("snyk-connector: role %s not found", member.Role)
+			l.Warn("snyk-connector: role not found", zap.String("role", member.Role))
+			continue
 		}
 
 		rv = append(rv, grant.NewGrant(resource, roles[rI].ID, userId))
