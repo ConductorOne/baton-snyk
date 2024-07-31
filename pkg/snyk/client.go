@@ -1,15 +1,13 @@
 package snyk
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -33,24 +31,31 @@ const (
 )
 
 type Client struct {
-	httpClient *http.Client
+	httpClient *uhttp.BaseHttpClient
 	baseUrl    *url.URL
 	token      string
 	groupID    string
 }
 
-func NewClient(httpClient *http.Client, groupID, token string) *Client {
+func NewClient(ctx context.Context, groupID, token string) (*Client, error) {
+	l := ctxzap.Extract(ctx)
+	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, l))
+	if err != nil {
+		return nil, err
+	}
+	wrapper := uhttp.NewBaseHttpClient(httpClient)
+
 	base := &url.URL{
 		Scheme: "https",
 		Host:   BaseHost,
 	}
 
 	return &Client{
-		httpClient: httpClient,
+		httpClient: wrapper,
 		baseUrl:    base,
 		token:      token,
 		groupID:    groupID,
-	}
+	}, nil
 }
 
 func (c *Client) prepareURL(path string) *url.URL {
@@ -268,56 +273,7 @@ func (c *Client) delete(ctx context.Context, urlAddress *url.URL) (string, error
 	return c.doRequest(ctx, urlAddress, http.MethodDelete, nil, nil, nil)
 }
 
-func checkContentType(contentType string) error {
-	if !strings.HasPrefix(contentType, "application") {
-		return fmt.Errorf("unexpected content type %s", contentType)
-	}
-
-	if !strings.Contains(contentType, "json") {
-		return fmt.Errorf("unexpected content type %s", contentType)
-	}
-
-	return nil
-}
-
-func parseJSON(body io.Reader, contentType string, res interface{}) error {
-	if err := checkContentType(contentType); err != nil {
-		r, rerr := io.ReadAll(body)
-		if rerr != nil {
-			return fmt.Errorf("%w - error reading response body: %w", err, rerr)
-		}
-
-		return fmt.Errorf("%w - %v", err, string(r))
-	}
-
-	if err := json.NewDecoder(body).Decode(res); err != nil {
-		return fmt.Errorf("failed to decode response body: %w", err)
-	}
-
-	return nil
-}
-
 func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method string, data interface{}, response interface{}, vars []Vars) (string, error) {
-	u, err := url.PathUnescape(urlAddress.String())
-	if err != nil {
-		return "", err
-	}
-
-	var body io.Reader
-	if data != nil {
-		jb, err := json.Marshal(data)
-		if err != nil {
-			return "", err
-		}
-
-		body = bytes.NewReader(jb)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
-	if err != nil {
-		return "", err
-	}
-
 	if vars != nil {
 		query := url.Values{}
 
@@ -325,43 +281,37 @@ func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method stri
 			pgVars.Apply(&query)
 		}
 
-		req.URL.RawQuery = query.Encode()
+		urlAddress.RawQuery = query.Encode()
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("token %s", c.token))
-	req.Header.Set("Content-Type", "application/json")
+	opts := []uhttp.RequestOption{
+		uhttp.WithAcceptJSONHeader(),
+		uhttp.WithHeader("Authorization", fmt.Sprintf("token %s", c.token)),
+	}
 
-	resp, err := c.httpClient.Do(req)
+	if data != nil {
+		opts = append(opts, uhttp.WithJSONBody(data), uhttp.WithContentTypeJSONHeader())
+	}
+
+	req, err := c.httpClient.NewRequest(ctx, method, urlAddress, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	errResp := &ErrorResp{}
+	doOpts := []uhttp.DoOption{
+		uhttp.WithErrorResponse(errResp),
+	}
+	if response != nil {
+		doOpts = append(doOpts, uhttp.WithJSONResponse(response))
+	}
+
+	resp, err := c.httpClient.Do(req, doOpts...)
 	if err != nil {
 		return "", err
 	}
 
 	defer resp.Body.Close()
-
-	contentType := resp.Header.Get("Content-Type")
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusBadRequest {
-			var res struct {
-				Err     string `json:"error"`
-				Message string `json:"message"`
-			}
-
-			if err := parseJSON(resp.Body, contentType, &res); err != nil {
-				return "", err
-			}
-
-			return "", fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, res.Message)
-		}
-
-		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-
-	if method == http.MethodGet {
-		if err := parseJSON(resp.Body, contentType, response); err != nil {
-			return "", err
-		}
-	}
 
 	return resp.Header.Get("Link"), nil
 }

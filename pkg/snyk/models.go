@@ -1,5 +1,7 @@
 package snyk
 
+import "fmt"
+
 type BaseResource struct {
 	ID string `json:"id"`
 }
@@ -47,4 +49,13 @@ type Role struct {
 	Modified    string `json:"modified"`
 	Slug        string
 	Type        string
+}
+
+type ErrorResp struct {
+	Err string `json:"error"`
+	Msg string `json:"message"`
+}
+
+func (e *ErrorResp) Message() string {
+	return fmt.Sprintf("unexpected error from snyk api: %s, %v", e.Err, e.Msg)
 }
