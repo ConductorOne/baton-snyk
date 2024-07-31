@@ -8,7 +8,6 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -56,13 +55,12 @@ func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 
 // New returns a new instance of the connector.
 func New(ctx context.Context, groupID, token string, orgs []string) (*Snyk, error) {
-	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, nil))
+	client, err := snyk.NewClient(ctx, groupID, token)
 	if err != nil {
 		return nil, err
 	}
-
 	return &Snyk{
-		client:  snyk.NewClient(httpClient, groupID, token),
+		client:  client,
 		GroupID: groupID,
 		Orgs:    orgs,
 	}, nil
