@@ -43,5 +43,9 @@
         "CAPABILITY_SYNC"
       ]
     }
+  ],
+  "connectorCapabilities": [
+    "CAPABILITY_PROVISION",
+    "CAPABILITY_SYNC"
   ]
 }
