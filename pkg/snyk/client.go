@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	BaseHost = "api.snyk.io/v1"
+	BaseHost = "api.snyk.io"
+	Version  = "/v1"
 
 	GroupEndpoint         = "/group/%s"
 	GroupMembersEndpoint  = "/members"
@@ -60,7 +61,8 @@ func NewClient(ctx context.Context, groupID, token string) (*Client, error) {
 
 func (c *Client) prepareURL(path string) *url.URL {
 	u := *c.baseUrl
-	u.Path = path
+	// Passing in the version separately since it encodes '/' if present in base url
+	u.Path = fmt.Sprintf("%s%s", Version, path)
 
 	return &u
 }
