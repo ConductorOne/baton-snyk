@@ -21,10 +21,10 @@ const (
 )
 
 var (
-	APIToken            = field.StringField(connector.APIToken, field.WithRequired(true), field.WithDescription("API token representing user or service account, used to authenticate with Snyk API."))
-	GroupID             = field.StringField(connector.GroupID, field.WithRequired(true), field.WithDescription("Snyk group ID to scope the synchronization."))
-	OrganizationIDs     = field.StringField(connector.OrgIDs, field.WithDescription("Limit syncing to specified organizations."))
-	configurationFields = []field.SchemaField{APIToken, GroupID, OrganizationIDs}
+	apiToken            = field.StringField(connector.APIToken, field.WithRequired(true), field.WithDescription("API token representing user or service account, used to authenticate with Snyk API."))
+	groupID             = field.StringField(connector.GroupID, field.WithRequired(true), field.WithDescription("Snyk group ID to scope the synchronization."))
+	organizationIDs     = field.StringField(connector.OrgIDs, field.WithDescription("Limit syncing to specified organizations."))
+	configurationFields = []field.SchemaField{apiToken, groupID, organizationIDs}
 )
 
 func main() {
