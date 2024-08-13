@@ -9,6 +9,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
+	"github.com/spf13/viper"
 )
 
 type Snyk struct {
@@ -16,6 +17,12 @@ type Snyk struct {
 	GroupID string
 	Orgs    []string
 }
+
+const (
+	APIToken = "api-token"
+	GroupID  = "group-id"
+	OrgIDs   = "org-ids"
+)
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
 func (s *Snyk) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
@@ -52,7 +59,12 @@ func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, groupID, token string, orgs []string) (*Snyk, error) {
+func New(ctx context.Context, cfg *viper.Viper) (*Snyk, error) {
+	var (
+		token   = cfg.GetString(APIToken)
+		groupID = cfg.GetString(GroupID)
+		orgs    = cfg.GetStringSlice(OrgIDs)
+	)
 	client, err := snyk.NewClient(ctx, groupID, token)
 	if err != nil {
 		return nil, err
