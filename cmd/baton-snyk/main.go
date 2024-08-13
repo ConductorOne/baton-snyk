@@ -25,10 +25,10 @@ var (
 	GroupID             = field.StringField(connector.GroupID, field.WithRequired(true), field.WithDescription("Snyk group ID to scope the synchronization."))
 	OrganizationIDs     = field.StringField(connector.OrgIDs, field.WithDescription("Limit syncing to specified organizations."))
 	configurationFields = []field.SchemaField{APIToken, GroupID, OrganizationIDs}
-	ctx                 = context.Background()
 )
 
 func main() {
+	ctx := context.Background()
 	_, cmd, err := configSchema.DefineConfiguration(ctx,
 		connectorName,
 		getConnector,
