@@ -49,7 +49,11 @@ func main() {
 
 func getConnector(ctx context.Context, cfg *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	cb, err := connector.New(ctx, cfg)
+	cb, err := connector.New(ctx,
+		cfg.GetString(connector.GroupID),
+		cfg.GetString(connector.APIToken),
+		cfg.GetStringSlice(connector.OrgIDs),
+	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err

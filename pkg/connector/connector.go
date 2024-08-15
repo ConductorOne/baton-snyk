@@ -9,7 +9,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
-	"github.com/spf13/viper"
 )
 
 type Snyk struct {
@@ -59,12 +58,7 @@ func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, cfg *viper.Viper) (*Snyk, error) {
-	var (
-		token   = cfg.GetString(APIToken)
-		groupID = cfg.GetString(GroupID)
-		orgs    = cfg.GetStringSlice(OrgIDs)
-	)
+func New(ctx context.Context, groupID, token string, orgs []string) (*Snyk, error) {
 	client, err := snyk.NewClient(ctx, groupID, token)
 	if err != nil {
 		return nil, err
