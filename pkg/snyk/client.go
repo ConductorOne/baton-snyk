@@ -60,11 +60,8 @@ func NewClient(ctx context.Context, groupID, token string) (*Client, error) {
 }
 
 func (c *Client) prepareURL(path string) *url.URL {
-	u := *c.baseUrl
 	// Passing in the version separately since it encodes '/' if present in base url
-	u.Path = fmt.Sprintf("%s%s", Version, path)
-
-	return &u
+	return c.baseUrl.JoinPath(Version, path)
 }
 
 func (c *Client) ListUsersInOrg(ctx context.Context, orgID string) ([]OrgUser, error) {
