@@ -184,7 +184,18 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 		return nil, fmt.Errorf("snyk-connector: only users can be granted organization entitlements")
 	}
 
-	if entitlement.Slug == OrgMemberEntitlement {
+	users, err := o.client.ListUsersInOrg(ctx, entitlement.Resource.Id.Resource)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
+	}
+	principalIsInOrg := false
+	for _, user := range users {
+		if user.ID == principal.Id.Resource {
+			principalIsInOrg = true
+			break
+		}
+	}
+	if !principalIsInOrg {
 		err := o.client.AddOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to add user to org: %w", err)
