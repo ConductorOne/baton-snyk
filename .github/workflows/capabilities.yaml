@@ -24,6 +24,10 @@ jobs:
         run: go build -o connector ./cmd/baton-snyk
 
       - name: Run and save output
+        env:
+          # TODO: Replace these dummy values with github secrets once we have CI tests
+          BATON_API_TOKEN: 1234
+          BATON_GROUP_ID: 1234
         run: ./connector capabilities > baton_capabilities.json
 
       - name: Commit changes
