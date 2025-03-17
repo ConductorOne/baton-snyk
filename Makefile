@@ -27,6 +27,3 @@ add-dep:
 lint:
 	golangci-lint run
 
-.PHONY: lint
-run:
-	go run ./cmd/baton-snyk
