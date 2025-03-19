@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -173,6 +174,8 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 
 func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
+	parts := strings.Split(entitlement.Id, ":")
+	roleID := parts[2]
 
 	if principal.Id.ResourceType != userResourceType.Id {
 		l.Debug(
@@ -203,7 +206,7 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 
 		return nil, nil
 	} else {
-		err := o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, entitlement.Slug)
+		err := o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
 		}
@@ -228,13 +231,26 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 		return nil, fmt.Errorf("snyk-connector: only users can have organization entitlements revoked")
 	}
 
-	if entitlement.Slug == OrgMemberEntitlement {
+	users, err := o.client.ListUsersInOrg(ctx, entitlement.Resource.Id.Resource)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
+	}
+	principalIsInOrg := false
+	for _, user := range users {
+		if user.ID == principal.Id.Resource {
+			principalIsInOrg = true
+			break
+		}
+	}
+
+	if principalIsInOrg {
 		err := o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
 	} else {
-		rolePublicID := entitlement.Slug
+		parts := strings.Split(entitlement.Id, ":")
+		rolePublicID := parts[2]
 		roles, err := o.client.ListOrgRoles(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
