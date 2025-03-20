@@ -175,6 +175,9 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	parts := strings.Split(entitlement.Id, ":")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("snyk-connector: invalid entitlement id: %s", entitlement.Id)
+	}
 	roleID := parts[2]
 
 	if principal.Id.ResourceType != userResourceType.Id {
@@ -250,6 +253,9 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 		}
 	} else {
 		parts := strings.Split(entitlement.Id, ":")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("snyk-connector: invalid entitlement id: %s", entitlement.Id)
+		}
 		rolePublicID := parts[2]
 		roles, err := o.client.ListOrgRoles(ctx)
 		if err != nil {
