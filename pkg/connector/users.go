@@ -19,7 +19,7 @@ func (u *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return userResourceType
 }
 
-func userResource(ctx context.Context, user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, error) {
+func userResource(_ context.Context, user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": user.Name,
 		"email":       user.Email,

@@ -125,7 +125,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 			ent.WithDescription(role.Description),
 		}
 
-		rv = append(rv, ent.NewPermissionEntitlement(resource, role.ID, permissionOptions...))
+		rv = append(rv, newPermissionEntitlement(resource, role.ID, role.Name, permissionOptions...))
 	}
 
 	return rv, "", nil, nil

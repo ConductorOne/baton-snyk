@@ -7,6 +7,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 )
 
 const ResourcesPageSize uint = 50
@@ -52,4 +53,19 @@ func parseLink(link string) (string, error) {
 	}
 
 	return url, fmt.Errorf("no next link found in header")
+}
+
+func newPermissionEntitlement(resource *v2.Resource, id string, name string, entitlementOptions ...ent.EntitlementOption) *v2.Entitlement {
+	entitlement := &v2.Entitlement{
+		Id:          ent.NewEntitlementID(resource, id),
+		DisplayName: name,
+		Slug:        name,
+		Purpose:     v2.Entitlement_PURPOSE_VALUE_PERMISSION,
+		Resource:    resource,
+	}
+
+	for _, entitlementOption := range entitlementOptions {
+		entitlementOption(entitlement)
+	}
+	return entitlement
 }
