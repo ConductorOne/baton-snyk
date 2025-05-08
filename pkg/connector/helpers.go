@@ -44,9 +44,10 @@ func parseLink(link string) (string, error) {
 		p := strings.TrimSpace(part)
 		if strings.HasPrefix(p, "rel=") {
 			rel := strings.TrimPrefix(p, "rel=")
-			if rel == "last" {
+			switch rel {
+			case "last":
 				return "", nil
-			} else if rel == "next" {
+			case "next":
 				return url, nil
 			}
 		}

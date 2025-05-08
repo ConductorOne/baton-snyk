@@ -32,7 +32,7 @@ func (o *orgBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return orgResourceType
 }
 
-func orgResource(ctx context.Context, org *snyk.Org, parentId *v2.ResourceId) (*v2.Resource, error) {
+func orgResource(_ context.Context, org *snyk.Org, parentId *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": org.Name,
 		"slug":        org.Slug,
