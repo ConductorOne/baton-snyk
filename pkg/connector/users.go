@@ -15,7 +15,7 @@ type userBuilder struct {
 	client *snyk.Client
 }
 
-func (u *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
+func (u *userBuilder) ResourceType(_ context.Context) *v2.ResourceType {
 	return userResourceType
 }
 
@@ -32,6 +32,7 @@ func userResource(_ context.Context, user *snyk.GroupUser, parentID *v2.Resource
 		user.ID,
 		[]rs.UserTraitOption{
 			rs.WithUserProfile(profile),
+			rs.WithEmail(user.Email, true),
 		},
 		rs.WithParentResourceID(parentID),
 	)
@@ -73,7 +74,7 @@ func (u *userBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
-func (u *userBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (u *userBuilder) Grants(_ context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	return nil, "", nil, nil
 }
 
