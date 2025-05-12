@@ -10,6 +10,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/conductorone/baton-snyk/pkg/connector"
+	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -24,7 +25,8 @@ var (
 	apiToken            = field.StringField(connector.APIToken, field.WithRequired(true), field.WithDescription("API token representing user or service account, used to authenticate with Snyk API."))
 	groupID             = field.StringField(connector.GroupID, field.WithRequired(true), field.WithDescription("Snyk group ID to scope the synchronization."))
 	organizationIDs     = field.StringField(connector.OrgIDs, field.WithDescription("Limit syncing to specified organizations."))
-	configurationFields = []field.SchemaField{apiToken, groupID, organizationIDs}
+	hostName            = field.StringField(connector.Hostname, field.WithDefaultValue(snyk.BaseHost), field.WithDescription("Snyk instance region hostname (defaults to api.snyk.io)."))
+	configurationFields = []field.SchemaField{apiToken, groupID, hostName, organizationIDs}
 )
 
 func main() {
@@ -53,6 +55,7 @@ func getConnector(ctx context.Context, cfg *viper.Viper) (types.ConnectorServer,
 		cfg.GetString(connector.GroupID),
 		cfg.GetString(connector.APIToken),
 		cfg.GetStringSlice(connector.OrgIDs),
+		cfg.GetString(connector.Hostname),
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))

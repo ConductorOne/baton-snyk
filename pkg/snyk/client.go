@@ -38,7 +38,7 @@ type Client struct {
 	groupID    string
 }
 
-func NewClient(ctx context.Context, groupID, token string) (*Client, error) {
+func NewClient(ctx context.Context, groupID, token string, hostname string) (*Client, error) {
 	l := ctxzap.Extract(ctx)
 	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, l))
 	if err != nil {
@@ -48,7 +48,7 @@ func NewClient(ctx context.Context, groupID, token string) (*Client, error) {
 
 	base := &url.URL{
 		Scheme: "https",
-		Host:   BaseHost,
+		Host:   hostname,
 	}
 
 	return &Client{

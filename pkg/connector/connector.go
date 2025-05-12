@@ -21,6 +21,7 @@ const (
 	APIToken = "api-token"
 	GroupID  = "group-id"
 	OrgIDs   = "org-ids"
+	Hostname = "hostname"
 )
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
@@ -58,8 +59,8 @@ func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, groupID, token string, orgs []string) (*Snyk, error) {
-	client, err := snyk.NewClient(ctx, groupID, token)
+func New(ctx context.Context, groupID, token string, orgs []string, hostname string) (*Snyk, error) {
+	client, err := snyk.NewClient(ctx, groupID, token, hostname)
 	if err != nil {
 		return nil, err
 	}
