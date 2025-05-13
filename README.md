@@ -14,6 +14,8 @@ More information on how to obtain API token can be found here: https://docs.snyk
 
 Group ID can be found in the URL of the group page in Snyk web platform or in Group general settings.
 
+Snyk is hosted in multiple regions, the connector defaults to "api.snyk.io" (region SNYK-US-01), if hosted in any other region, please specify the proper hostname. For more information visit: https://docs.snyk.io/snyk-api/v1-api#api-urls
+
 # Getting Started
 
 ## brew
@@ -78,6 +80,7 @@ Flags:
       --client-secret string   The client secret used to authenticate with ConductorOne ($BATON_CLIENT_SECRET)
   -f, --file string            The path to the c1z file to sync with ($BATON_FILE) (default "sync.c1z")
       --group-id string        required: Snyk group ID to scope the synchronization. ($BATON_GROUP_ID)
+      --hostname string        Snyk region hostname (defaults to api.snyk.io). ($BATON_SNYK_HOST_NAME)
   -h, --help                   help for baton-snyk
       --log-format string      The output format for logs: json, console ($BATON_LOG_FORMAT) (default "json")
       --log-level string       The log level: debug, info, warn, error ($BATON_LOG_LEVEL) (default "info")
