@@ -1,60 +1,7 @@
 #AUTO GENERATED CODE. UPDATE THE CONFIG IN BATON-TEMPLATE FIRST
 version: "2"
-run:
-  exclude:
-    - "pkg/config/conf.gen.go"
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
-  gocritic:
-    enabled-checks:
-      - ruleguard
-    # The list of supported checkers can be find in https://go-critic.github.io/overview.
-    settings:
-      underef:
-        # Whether to skip (*x).method() calls where x is a pointer receiver.
-        skipRecvDeref: false
-      ruleguard:
-        rules: "${configDir}/tools/rules.go"
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment # too strict
-      - shadow # complains too much about shadowing errors. All research points to this being fine.
-  nakedret:
-    max-func-lines: 0
-  nolintlint:
-    allow-no-explanation: [forbidigo, tracecheck, gomnd, gochecknoinits, makezero]
-    require-explanation: true
-    require-specific: true
-  revive:
-    ignore-generated-header: true
-    severity: error
-    exclude:
-      - "pkg/config/conf.gen.go"
-    rules:
-      - name: atomic
-      - name: line-length-limit
-        arguments: [200]
-      # These are functions that we use without checking the errors often. Most of these can't return an error even
-      # though they implement an interface that can.
-      - name: unhandled-error
-        arguments:
-          - fmt.Printf
-          - fmt.Println
-          - fmt.Fprint
-          - fmt.Fprintf
-          - fmt.Fprintln
-          - os.Stderr.Sync
-          - sb.WriteString
-          - buf.WriteString
-          - hasher.Write
-          - os.Setenv
-          - os.RemoveAll
-      - name: var-naming
-        arguments: [["ID", "URL", "HTTP", "API"], []]
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck # Errcheck is a program for checking for unchecked errors in go programs. These unchecked errors can be critical bugs in some cases
     - govet # Vet examines Go source code and reports suspicious constructs, such as Printf calls whose arguments do not align with the format string
@@ -88,15 +35,57 @@ linters:
     - unconvert # Remove unnecessary type conversions
     - usestdlibvars # detect the possibility to use variables/constants from the Go standard library
     - whitespace # Tool for detection of leading and trailing whitespace
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-checks:
+        - ruleguard
+      # The list of supported checkers can be find in https://go-critic.github.io/overview.
+      settings:
+        underef:
+          # Whether to skip (*x).method() calls where x is a pointer receiver.
+          skipRecvDeref: false
+        ruleguard:
+          rules: ${base-path}/tools/rules.go
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # too strict
+        - shadow # complains too much about shadowing errors. All research points to this being fine.
+    nakedret:
+      max-func-lines: 0
+    nolintlint:
+      allow-no-explanation: [forbidigo, tracecheck, gomnd, gochecknoinits, makezero]
+      require-explanation: true
+      require-specific: true
+    revive:
+      severity: error
+      rules:
+        - name: atomic
+        - name: line-length-limit
+          arguments: [200]
+        # These are functions that we use without checking the errors often. Most of these can't return an error even
+        # though they implement an interface that can.
+        - name: unhandled-error
+          arguments:
+            - fmt.Printf
+            - fmt.Println
+            - fmt.Fprint
+            - fmt.Fprintf
+            - fmt.Fprintln
+            - os.Stderr.Sync
+            - sb.WriteString
+            - buf.WriteString
+            - hasher.Write
+            - os.Setenv
+            - os.RemoveAll
+        - name: var-naming
+          arguments:
+            - - ID
+              - URL
+              - HTTP
+              - API
+            - []
 issues:
   max-same-issues: 50
-  exclude-rules:
-    # Don't require TODO comments to end in a period
-    - source: "(TODO)"
-      linters: [godot]
-    # Exclude all linters for generated files
-    - path: pkg/config/conf\.gen\.go
-      linters:
-        - revive
-        - errcheck
-        - godot
