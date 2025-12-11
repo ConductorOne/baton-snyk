@@ -12,7 +12,6 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types"
 	cfg "github.com/conductorone/baton-snyk/pkg/config"
 	"github.com/conductorone/baton-snyk/pkg/connector"
-	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -49,16 +48,11 @@ func getConnector(ctx context.Context, snykCfg *cfg.Snyk) (types.ConnectorServer
 		return nil, err
 	}
 
-	hostname := snykCfg.Hostname
-	if hostname == "" {
-		hostname = snyk.BaseHost
-	}
-
 	cb, err := connector.New(ctx,
 		snykCfg.GroupId,
 		snykCfg.ApiToken,
 		snykCfg.OrgIds,
-		hostname,
+		snykCfg.Hostname,
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
