@@ -1,7 +1,7 @@
 #AUTO GENERATED CODE. UPDATE THE CONFIG IN BATON-TEMPLATE FIRST
 version: "2"
 run:
-  skip-files:
+  exclude:
     - "pkg/config/conf.gen.go"
 linters-settings:
   exhaustive:
@@ -95,15 +95,8 @@ issues:
     - source: "(TODO)"
       linters: [godot]
     # Exclude all linters for generated files
-    - path: "pkg/config/conf\\.gen\\.go"
+    - path: pkg/config/conf\.gen\.go
       linters:
         - revive
         - errcheck
         - godot
-    - path: "conf\\.gen\\.go"
-      linters:
-        - revive
-    # Skip revive checks for files with DO NOT EDIT
-    - source: "Code generated.*DO NOT EDIT"
-      linters:
-        - revive
