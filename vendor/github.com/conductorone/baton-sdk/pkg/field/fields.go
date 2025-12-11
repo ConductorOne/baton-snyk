@@ -8,7 +8,7 @@ import (
 	v1_conf "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 )
 
-var WrongValueTypeErr = errors.New("unable to cast any to concrete type")
+var ErrWrongValueType = errors.New("unable to cast any to concrete type")
 
 type Variant string
 
@@ -17,6 +17,7 @@ const (
 	BoolVariant        Variant = "BoolField"
 	IntVariant         Variant = "IntField"
 	StringSliceVariant Variant = "StringSliceField"
+	StringMapVariant   Variant = "StringMapField"
 )
 
 type WebFieldType string
@@ -34,6 +35,7 @@ type FieldRule struct {
 	ss *v1_conf.RepeatedStringRules
 	b  *v1_conf.BoolRules
 	i  *v1_conf.Int64Rules
+	sm *v1_conf.StringMapRules
 }
 
 type syncerConfig struct {
@@ -70,10 +72,15 @@ type SchemaField struct {
 
 	// Config acutally ingested on the connector side - auth, regions, etc
 	ConnectorConfig connectorConfig
+
+	WasReExported bool
+
+	// Groups
+	FieldGroups []SchemaFieldGroup
 }
 
 type SchemaTypes interface {
-	~string | ~bool | ~int | ~[]string
+	~string | ~bool | ~int | ~[]string | ~map[string]any
 }
 
 func (s SchemaField) GetName() string {
@@ -107,6 +114,13 @@ func (s SchemaField) GetDescription() string {
 	return line
 }
 
+func (s SchemaField) ExportAs(et ExportTarget) SchemaField {
+	c := s
+	c.ExportTarget = et
+	c.WasReExported = true
+	return c
+}
+
 // Go doesn't allow generic methods on a non-generic struct.
 func ValidateField[T SchemaTypes](s *SchemaField, value T) (bool, error) {
 	return s.validate(value)
@@ -117,27 +131,33 @@ func (s SchemaField) validate(value any) (bool, error) {
 	case StringVariant:
 		v, ok := value.(string)
 		if !ok {
-			return false, WrongValueTypeErr
+			return false, ErrWrongValueType
 		}
 		return v != "", ValidateStringRules(s.Rules.s, v, s.FieldName)
 	case BoolVariant:
 		v, ok := value.(bool)
 		if !ok {
-			return false, WrongValueTypeErr
+			return false, ErrWrongValueType
 		}
 		return v, ValidateBoolRules(s.Rules.b, v, s.FieldName)
 	case IntVariant:
 		v, ok := value.(int)
 		if !ok {
-			return false, WrongValueTypeErr
+			return false, ErrWrongValueType
 		}
 		return v != 0, ValidateIntRules(s.Rules.i, v, s.FieldName)
 	case StringSliceVariant:
 		v, ok := value.([]string)
 		if !ok {
-			return false, WrongValueTypeErr
+			return false, ErrWrongValueType
 		}
 		return len(v) != 0, ValidateRepeatedStringRules(s.Rules.ss, v, s.FieldName)
+	case StringMapVariant:
+		v, ok := value.(map[string]any)
+		if !ok {
+			return false, ErrWrongValueType
+		}
+		return len(v) != 0, ValidateStringMapRules(s.Rules.sm, v, s.FieldName)
 	default:
 		return false, fmt.Errorf("unknown field type %s", s.Variant)
 	}
@@ -151,7 +171,7 @@ func toUpperCase(i string) string {
 func GetDefaultValue[T SchemaTypes](s SchemaField) (*T, error) {
 	value, ok := s.DefaultValue.(T)
 	if !ok {
-		return nil, WrongValueTypeErr
+		return nil, ErrWrongValueType
 	}
 	return &value, nil
 }
@@ -187,6 +207,27 @@ func StringField(name string, optional ...fieldOption) SchemaField {
 		Rules:           FieldRule{},
 		SyncerConfig:    syncerConfig{},
 		ConnectorConfig: connectorConfig{FieldType: Text},
+	}
+
+	for _, o := range optional {
+		field = o(field)
+	}
+
+	return field
+}
+
+func FileUploadField(name string, bonusStrings []string, optional ...fieldOption) SchemaField {
+	field := SchemaField{
+		FieldName:    name,
+		Variant:      StringVariant,
+		DefaultValue: "",
+		ExportTarget: ExportTargetGUI,
+		Rules:        FieldRule{},
+		SyncerConfig: syncerConfig{},
+		ConnectorConfig: connectorConfig{
+			FieldType:    FileUpload,
+			BonusStrings: bonusStrings,
+		},
 	}
 
 	for _, o := range optional {
@@ -232,6 +273,24 @@ func StringSliceField(name string, optional ...fieldOption) SchemaField {
 	return field
 }
 
+func StringMapField(name string, optional ...fieldOption) SchemaField {
+	field := SchemaField{
+		FieldName:       name,
+		Variant:         StringMapVariant,
+		DefaultValue:    map[string]any{},
+		ExportTarget:    ExportTargetGUI,
+		Rules:           FieldRule{},
+		SyncerConfig:    syncerConfig{},
+		ConnectorConfig: connectorConfig{},
+	}
+
+	for _, o := range optional {
+		field = o(field)
+	}
+
+	return field
+}
+
 func SelectField(name string, options []string, optional ...fieldOption) SchemaField {
 	field := SchemaField{
 		FieldName:    name,
@@ -239,10 +298,28 @@ func SelectField(name string, options []string, optional ...fieldOption) SchemaF
 		DefaultValue: "",
 		ExportTarget: ExportTargetGUI,
 		Rules: FieldRule{
-			s: &v1_conf.StringRules{In: options},
+			s: v1_conf.StringRules_builder{In: options}.Build(),
 		},
 		SyncerConfig:    syncerConfig{},
 		ConnectorConfig: connectorConfig{FieldType: Text},
+	}
+
+	for _, o := range optional {
+		field = o(field)
+	}
+
+	return field
+}
+
+func Oauth2Field(name string, optional ...fieldOption) SchemaField {
+	field := SchemaField{
+		FieldName:       name,
+		Variant:         StringVariant,
+		DefaultValue:    "",
+		ExportTarget:    ExportTargetGUI,
+		Rules:           FieldRule{},
+		SyncerConfig:    syncerConfig{},
+		ConnectorConfig: connectorConfig{FieldType: OAuth2},
 	}
 
 	for _, o := range optional {

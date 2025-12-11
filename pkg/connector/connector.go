@@ -1,3 +1,6 @@
+// Package connector contains the core Baton connector logic for Snyk.
+// It defines the public `Snyk` type that satisfies the Baton SDK interfaces
+// to synchronize groups, organizations and users from Snyk.
 package connector
 
 import (
@@ -11,12 +14,14 @@ import (
 	"github.com/conductorone/baton-snyk/pkg/snyk"
 )
 
+// Snyk connector manages access to Snyk groups, organizations and users.
 type Snyk struct {
 	client  *snyk.Client
 	GroupID string
 	Orgs    []string
 }
 
+// Configuration field names for the Snyk connector.
 const (
 	APIToken = "api-token"
 	GroupID  = "group-id"
@@ -25,7 +30,7 @@ const (
 )
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
-func (s *Snyk) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
+func (s *Snyk) ResourceSyncers(_ context.Context) []connectorbuilder.ResourceSyncer {
 	return []connectorbuilder.ResourceSyncer{
 		newGroupBuilder(s.client, s.GroupID),
 		newOrgBuilder(s.client, s.Orgs),
@@ -35,12 +40,12 @@ func (s *Snyk) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceS
 
 // Asset takes an input AssetRef and attempts to fetch it using the connector's authenticated http client
 // It streams a response, always starting with a metadata object, following by chunked payloads for the asset.
-func (s *Snyk) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCloser, error) {
+func (s *Snyk) Asset(_ context.Context, _ *v2.AssetRef) (string, io.ReadCloser, error) {
 	return "", nil, nil
 }
 
 // Metadata returns metadata about the connector.
-func (s *Snyk) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
+func (s *Snyk) Metadata(_ context.Context) (*v2.ConnectorMetadata, error) {
 	return &v2.ConnectorMetadata{
 		DisplayName: "Snyk",
 		Description: "Connector syncing Snyk parent group and its organizations and users to Baton",

@@ -21,17 +21,22 @@ func WithRequired(required bool) fieldOption {
 			if o.Rules.i == nil {
 				o.Rules.i = &v1_conf.Int64Rules{}
 			}
-			o.Rules.i.IsRequired = required
+			o.Rules.i.SetIsRequired(required)
 		case StringVariant:
 			if o.Rules.s == nil {
 				o.Rules.s = &v1_conf.StringRules{}
 			}
-			o.Rules.s.IsRequired = required
+			o.Rules.s.SetIsRequired(required)
 		case StringSliceVariant:
 			if o.Rules.ss == nil {
 				o.Rules.ss = &v1_conf.RepeatedStringRules{}
 			}
-			o.Rules.ss.IsRequired = required
+			o.Rules.ss.SetIsRequired(required)
+		case StringMapVariant:
+			if o.Rules.sm == nil {
+				o.Rules.sm = &v1_conf.StringMapRules{}
+			}
+			o.Rules.sm.SetIsRequired(required)
 		default:
 			panic(fmt.Sprintf("field %s has unsupported type %s", o.FieldName, o.Variant))
 		}
@@ -58,6 +63,13 @@ func WithDefaultValue(value any) fieldOption {
 	return func(o SchemaField) SchemaField {
 		o.DefaultValue = value
 
+		return o
+	}
+}
+
+func WithDefaultValueFunc(f func() any) fieldOption {
+	return func(o SchemaField) SchemaField {
+		o.DefaultValue = f()
 		return o
 	}
 }
@@ -194,9 +206,41 @@ func WithStringSlice(f stringSliceRuleMaker) fieldOption {
 	}
 }
 
+type stringMapRuleMaker func(r *StringMapRuler)
+
+func WithStringMap(f stringMapRuleMaker) fieldOption {
+	return func(o SchemaField) SchemaField {
+		rules := o.Rules.sm
+		if rules == nil {
+			rules = &v1_conf.StringMapRules{}
+		}
+		o.Rules.sm = rules
+		f(NewStringMapBuilder(rules))
+		return o
+	}
+}
+
 func WithStructFieldName(name string) fieldOption {
 	return func(o SchemaField) SchemaField {
 		o.StructFieldName = name
 		return o
 	}
+}
+
+type StringMapRuler struct {
+	rules *v1_conf.StringMapRules
+}
+
+func NewStringMapBuilder(rules *v1_conf.StringMapRules) *StringMapRuler {
+	return &StringMapRuler{rules: rules}
+}
+
+func (r *StringMapRuler) WithRequired(required bool) *StringMapRuler {
+	r.rules.SetIsRequired(required)
+	return r
+}
+
+func (r *StringMapRuler) WithValidateEmpty(validateEmpty bool) *StringMapRuler {
+	r.rules.SetValidateEmpty(validateEmpty)
+	return r
 }
