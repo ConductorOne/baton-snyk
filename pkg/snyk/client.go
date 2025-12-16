@@ -1,3 +1,6 @@
+// Package snyk implements an HTTP client that interacts with the Snyk API
+// together with helper structures used by the connector builders. All requests
+// are executed through the Baton SDK HTTP utilities and authenticated with a token.
 package snyk
 
 import (
@@ -12,6 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// API endpoints and constants for the Snyk API.
 const (
 	BaseHost = "api.snyk.io"
 	Version  = "/v1"
@@ -31,13 +35,15 @@ const (
 	OrgCollaboratorRole = "collaborator"
 )
 
+// Client is an HTTP client for interacting with the Snyk API.
 type Client struct {
 	httpClient *uhttp.BaseHttpClient
-	baseUrl    *url.URL
+	baseURL    *url.URL
 	token      string
 	groupID    string
 }
 
+// NewClient creates a new Snyk API client authenticated with the provided token.
 func NewClient(ctx context.Context, groupID, token string, hostname string) (*Client, error) {
 	l := ctxzap.Extract(ctx)
 	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, l))
@@ -53,7 +59,7 @@ func NewClient(ctx context.Context, groupID, token string, hostname string) (*Cl
 
 	return &Client{
 		httpClient: wrapper,
-		baseUrl:    base,
+		baseURL:    base,
 		token:      token,
 		groupID:    groupID,
 	}, nil
@@ -61,9 +67,10 @@ func NewClient(ctx context.Context, groupID, token string, hostname string) (*Cl
 
 func (c *Client) prepareURL(path string) *url.URL {
 	// Passing in the version separately since it encodes '/' if present in base url
-	return c.baseUrl.JoinPath(Version, path)
+	return c.baseURL.JoinPath(Version, path)
 }
 
+// ListUsersInOrg retrieves all users that are members of the specified organization.
 func (c *Client) ListUsersInOrg(ctx context.Context, orgID string) ([]OrgUser, error) {
 	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint)
 	if err != nil {
@@ -79,6 +86,7 @@ func (c *Client) ListUsersInOrg(ctx context.Context, orgID string) ([]OrgUser, e
 	return users, nil
 }
 
+// ListUsersInGroup retrieves all users that are members of the configured group.
 func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupMembersEndpoint)
 	if err != nil {
@@ -94,6 +102,7 @@ func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	return users, nil
 }
 
+// GetGroupDetails retrieves metadata about the configured group.
 func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
 	if err != nil {
@@ -110,6 +119,7 @@ func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
 	return &group, nil
 }
 
+// Role types in Snyk.
 const (
 	OrgRoleType   = "org"
 	GroupRoleType = "group"
@@ -147,6 +157,7 @@ func (c *Client) filterRoles(ctx context.Context, roles []Role, roleType string)
 	return filteredRoles, nil
 }
 
+// ListOrgRoles retrieves all roles available in the organization.
 func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupRolesEndpoint)
 	if err != nil {
@@ -168,11 +179,13 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	return orgRoles, nil
 }
 
+// AddMemberBody represents the request body for adding a member to an organization.
 type AddMemberBody struct {
-	UserId string `json:"userId"`
+	UserID string `json:"userId"`
 	Role   string `json:"role"`
 }
 
+// AddOrgMember adds a user to the specified organization with the collaborator role.
 func (c *Client) AddOrgMember(ctx context.Context, userID, orgID string) error {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint)
 	if err != nil {
@@ -180,7 +193,7 @@ func (c *Client) AddOrgMember(ctx context.Context, userID, orgID string) error {
 	}
 
 	body := &AddMemberBody{
-		UserId: userID,
+		UserID: userID,
 		Role:   OrgCollaboratorRole,
 	}
 
@@ -192,6 +205,7 @@ func (c *Client) AddOrgMember(ctx context.Context, userID, orgID string) error {
 	return nil
 }
 
+// RemoveOrgMember removes a user from the specified organization.
 func (c *Client) RemoveOrgMember(ctx context.Context, userID, orgID string) error {
 	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint, userID)
 	if err != nil {
@@ -206,10 +220,12 @@ func (c *Client) RemoveOrgMember(ctx context.Context, userID, orgID string) erro
 	return nil
 }
 
+// UpdateRoleBody represents the request body for updating a user's role.
 type UpdateRoleBody struct {
 	RoleID string `json:"rolePublicId"`
 }
 
+// UpdateOrgRole updates the role of a user within an organization.
 func (c *Client) UpdateOrgRole(ctx context.Context, userID, orgID, roleID string) error {
 	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint, fmt.Sprintf(OrgUserUpdateEndpoint, userID))
 	if err != nil {
@@ -228,6 +244,7 @@ func (c *Client) UpdateOrgRole(ctx context.Context, userID, orgID, roleID string
 	return nil
 }
 
+// ListOrgs retrieves all organizations in the configured group, with pagination support.
 func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, string, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
 	if err != nil {
@@ -310,7 +327,12 @@ func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method stri
 		return "", err
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			logger := ctxzap.Extract(ctx)
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
 
 	return resp.Header.Get("Link"), nil
 }

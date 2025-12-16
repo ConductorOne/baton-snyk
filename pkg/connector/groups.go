@@ -14,6 +14,7 @@ import (
 	"github.com/conductorone/baton-snyk/pkg/snyk"
 )
 
+// Group role constants for Snyk.
 const (
 	AdminRole  = "admin"
 	MemberRole = "member"
@@ -27,11 +28,11 @@ type groupBuilder struct {
 	ID     string
 }
 
-func (g *groupBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
+func (g *groupBuilder) ResourceType(_ context.Context) *v2.ResourceType {
 	return groupResourceType
 }
 
-func groupResource(ctx context.Context, group *snyk.Group) (*v2.Resource, error) {
+func groupResource(_ context.Context, group *snyk.Group) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": group.Name,
 		"url":         group.URL,
@@ -58,7 +59,7 @@ func groupResource(ctx context.Context, group *snyk.Group) (*v2.Resource, error)
 
 // List returns all the groups from the database as resource objects.
 // Groups include a GroupTrait because they are the 'shape' of a standard group.
-func (g *groupBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (g *groupBuilder) List(ctx context.Context, _ *v2.ResourceId, _ *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	var rv []*v2.Resource
 
 	// get details from orgs endpoint
@@ -78,7 +79,7 @@ func (g *groupBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId
 }
 
 // Entitlements returns all default permission entitlements for a group.
-func (g *groupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (g *groupBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
 	for _, role := range groupRoles {
@@ -95,7 +96,7 @@ func (g *groupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, 
 }
 
 // Grants returns all the permission grants for a group.
-func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	var rv []*v2.Grant
 
 	members, err := g.client.ListUsersInGroup(ctx)
@@ -105,13 +106,13 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken
 
 	// permission grants
 	for _, member := range members {
-		userId, err := rs.NewResourceID(userResourceType, member.ID)
+		userID, err := rs.NewResourceID(userResourceType, member.ID)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource id: %w", err)
 		}
 
 		if slices.Contains(groupRoles, member.Role) {
-			rv = append(rv, grant.NewGrant(resource, member.Role, userId))
+			rv = append(rv, grant.NewGrant(resource, member.Role, userID))
 		}
 	}
 

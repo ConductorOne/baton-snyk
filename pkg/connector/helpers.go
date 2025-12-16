@@ -10,6 +10,7 @@ import (
 	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 )
 
+// ResourcesPageSize defines the number of resources to fetch per page for paginated API calls.
 const ResourcesPageSize uint = 50
 
 func annotationsForUserResourceType() annotations.Annotations {

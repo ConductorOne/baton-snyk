@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// Entitlement names for organization membership and roles.
 const (
 	OrgMemberEntitlement       = "member"
 	OrgAdminEntitlement        = "admin"
@@ -28,11 +29,11 @@ type orgBuilder struct {
 	orgs   map[string]struct{}
 }
 
-func (o *orgBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
+func (o *orgBuilder) ResourceType(_ context.Context) *v2.ResourceType {
 	return orgResourceType
 }
 
-func orgResource(_ context.Context, org *snyk.Org, parentId *v2.ResourceId) (*v2.Resource, error) {
+func orgResource(_ context.Context, org *snyk.Org, parentID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": org.Name,
 		"slug":        org.Slug,
@@ -46,7 +47,7 @@ func orgResource(_ context.Context, org *snyk.Org, parentId *v2.ResourceId) (*v2
 		[]rs.GroupTraitOption{
 			rs.WithGroupProfile(profile),
 		},
-		rs.WithParentResourceID(parentId),
+		rs.WithParentResourceID(parentID),
 	)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 }
 
 // Grants returns slice of membership and permission grants for the org.
-func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
 
@@ -148,13 +149,13 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 	}
 
 	for _, member := range members {
-		userId, err := rs.NewResourceID(userResourceType, member.ID)
+		userID, err := rs.NewResourceID(userResourceType, member.ID)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource id: %w", err)
 		}
 
 		// membership grants
-		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userId))
+		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userID))
 
 		// check if the role is a valid role
 		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
@@ -166,7 +167,7 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 			continue
 		}
 
-		rv = append(rv, grant.NewGrant(resource, roles[rI].ID, userId))
+		rv = append(rv, grant.NewGrant(resource, roles[rI].ID, userID))
 	}
 
 	return rv, "", nil, nil
@@ -208,11 +209,11 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 		}
 
 		return nil, nil
-	} else {
-		err := o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
-		if err != nil {
-			return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
-		}
+	}
+
+	err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
 	}
 
 	return nil, nil

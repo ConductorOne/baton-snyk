@@ -43,13 +43,17 @@ var (
 )
 
 type c1ApiTaskManager struct {
-	mtx               sync.Mutex
-	started           bool
-	queue             []*v1.Task
-	serviceClient     BatonServiceClient
-	tempDir           string
-	skipFullSync      bool
-	runnerShouldDebug bool
+	mtx                                 sync.Mutex
+	started                             bool
+	queue                               []*v1.Task
+	serviceClient                       BatonServiceClient
+	tempDir                             string
+	skipFullSync                        bool
+	runnerShouldDebug                   bool
+	externalResourceC1Z                 string
+	externalResourceEntitlementIdFilter string
+	targetedSyncResourceIDs             []string
+	syncResourceTypeIDs                 []string
 }
 
 // getHeartbeatInterval returns an appropriate heartbeat interval. If the interval is 0, it will return the default heartbeat interval.
@@ -91,13 +95,11 @@ func (c *c1ApiTaskManager) Next(ctx context.Context) (*v1.Task, time.Duration, e
 		l.Debug("c1_api_task_manager.Next(): queueing initial hello task")
 		c.started = true
 		// Append a hello task to the queue on startup.
-		c.queue = append(c.queue, &v1.Task{
+		c.queue = append(c.queue, v1.Task_builder{
 			Id:     "",
 			Status: v1.Task_STATUS_PENDING,
-			TaskType: &v1.Task_Hello{
-				Hello: &v1.Task_HelloTask{},
-			},
-		})
+			Hello:  &v1.Task_HelloTask{},
+		}.Build())
 
 		// TODO(morgabra) Get resumable tasks here and queue them.
 	}
@@ -129,7 +131,7 @@ func (c *c1ApiTaskManager) Next(ctx context.Context) (*v1.Task, time.Duration, e
 		zap.Stringer("task_type", tasks.GetType(resp.GetTask())),
 	)
 
-	l.Debug("c1_api_task_manager.Next(): got task")
+	l.Debug("c1_api_task_manager.Next(): got task", zap.Duration("next_poll", nextPoll))
 	return resp.GetTask(), nextPoll, nil
 }
 
@@ -158,16 +160,14 @@ func (c *c1ApiTaskManager) finishTask(ctx context.Context, task *v1.Task, resp p
 
 	if err == nil {
 		l.Info("c1_api_task_manager.finishTask(): finishing task successfully")
-		_, err = c.serviceClient.FinishTask(finishCtx, &v1.BatonServiceFinishTaskRequest{
+		_, err = c.serviceClient.FinishTask(finishCtx, v1.BatonServiceFinishTaskRequest_builder{
 			TaskId: task.GetId(),
 			Status: nil,
-			FinalState: &v1.BatonServiceFinishTaskRequest_Success_{
-				Success: &v1.BatonServiceFinishTaskRequest_Success{
-					Annotations: annos,
-					Response:    marshalledResp,
-				},
-			},
-		})
+			Success: v1.BatonServiceFinishTaskRequest_Success_builder{
+				Annotations: annos,
+				Response:    marshalledResp,
+			}.Build(),
+		}.Build())
 		if err != nil {
 			l.Error("c1_api_task_manager.finishTask(): error while attempting to finish task successfully", zap.Error(err))
 			return err
@@ -183,20 +183,18 @@ func (c *c1ApiTaskManager) finishTask(ctx context.Context, task *v1.Task, resp p
 		statusErr = status.New(codes.Unknown, err.Error())
 	}
 
-	_, rpcErr := c.serviceClient.FinishTask(finishCtx, &v1.BatonServiceFinishTaskRequest{
+	_, rpcErr := c.serviceClient.FinishTask(finishCtx, v1.BatonServiceFinishTaskRequest_builder{
 		TaskId: task.GetId(),
 		Status: &pbstatus.Status{
-			//nolint:gosec // No risk of overflow because `Code` is a small enum.
+
 			Code:    int32(statusErr.Code()),
 			Message: statusErr.Message(),
 		},
-		FinalState: &v1.BatonServiceFinishTaskRequest_Error_{
-			Error: &v1.BatonServiceFinishTaskRequest_Error{
-				NonRetryable: errors.Is(err, ErrTaskNonRetryable),
-				Annotations:  annos,
-			},
-		},
-	})
+		Error: v1.BatonServiceFinishTaskRequest_Error_builder{
+			NonRetryable: errors.Is(err, ErrTaskNonRetryable),
+			Annotations:  annos,
+		}.Build(),
+	}.Build())
 	if rpcErr != nil {
 		l.Error("c1_api_task_manager.finishTask(): error finishing task", zap.Error(rpcErr))
 		return errors.Join(err, rpcErr)
@@ -244,7 +242,15 @@ func (c *c1ApiTaskManager) Process(ctx context.Context, task *v1.Task, cc types.
 	var handler tasks.TaskHandler
 	switch tasks.GetType(task) {
 	case taskTypes.FullSyncType:
-		handler = newFullSyncTaskHandler(task, tHelpers, c.skipFullSync)
+		handler = newFullSyncTaskHandler(
+			task,
+			tHelpers,
+			c.skipFullSync,
+			c.externalResourceC1Z,
+			c.externalResourceEntitlementIdFilter,
+			c.targetedSyncResourceIDs,
+			c.syncResourceTypeIDs,
+		)
 	case taskTypes.HelloType:
 		handler = newHelloTaskHandler(task, tHelpers)
 	case taskTypes.GrantType:
@@ -292,15 +298,23 @@ func (c *c1ApiTaskManager) Process(ctx context.Context, task *v1.Task, cc types.
 	return nil
 }
 
-func NewC1TaskManager(ctx context.Context, clientID string, clientSecret string, tempDir string, skipFullSync bool) (tasks.Manager, error) {
+func NewC1TaskManager(
+	ctx context.Context, clientID string, clientSecret string, tempDir string, skipFullSync bool,
+	externalC1Z string, externalResourceEntitlementIdFilter string, targetedSyncResourceIDs []string,
+	syncResourceTypeIDs []string,
+) (tasks.Manager, error) {
 	serviceClient, err := newServiceClient(ctx, clientID, clientSecret)
 	if err != nil {
 		return nil, err
 	}
 
 	return &c1ApiTaskManager{
-		serviceClient: serviceClient,
-		tempDir:       tempDir,
-		skipFullSync:  skipFullSync,
+		serviceClient:                       serviceClient,
+		tempDir:                             tempDir,
+		skipFullSync:                        skipFullSync,
+		externalResourceC1Z:                 externalC1Z,
+		externalResourceEntitlementIdFilter: externalResourceEntitlementIdFilter,
+		targetedSyncResourceIDs:             targetedSyncResourceIDs,
+		syncResourceTypeIDs:                 syncResourceTypeIDs,
 	}, nil
 }

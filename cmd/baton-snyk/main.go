@@ -1,3 +1,4 @@
+// Package main provides the entry point for the Snyk Baton connector.
 package main
 
 import (
@@ -5,43 +6,33 @@ import (
 	"fmt"
 	"os"
 
-	configSchema "github.com/conductorone/baton-sdk/pkg/config"
+	"github.com/conductorone/baton-sdk/pkg/config"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/types"
+	cfg "github.com/conductorone/baton-snyk/pkg/config"
 	"github.com/conductorone/baton-snyk/pkg/connector"
-	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
-const (
-	version       = "dev"
-	connectorName = "baton-snyk"
-)
-
-var (
-	apiToken            = field.StringField(connector.APIToken, field.WithRequired(true), field.WithDescription("API token representing user or service account, used to authenticate with Snyk API."))
-	groupID             = field.StringField(connector.GroupID, field.WithRequired(true), field.WithDescription("Snyk group ID to scope the synchronization."))
-	organizationIDs     = field.StringField(connector.OrgIDs, field.WithDescription("Limit syncing to specified organizations."))
-	hostName            = field.StringField(connector.Hostname, field.WithDefaultValue(snyk.BaseHost), field.WithDescription("Snyk instance region hostname (defaults to api.snyk.io)."))
-	configurationFields = []field.SchemaField{apiToken, groupID, hostName, organizationIDs}
-)
+var version = "dev"
 
 func main() {
 	ctx := context.Background()
-	_, cmd, err := configSchema.DefineConfiguration(ctx,
-		connectorName,
+
+	_, cmd, err := config.DefineConfiguration(
+		ctx,
+		"baton-snyk",
 		getConnector,
-		field.NewConfiguration(configurationFields),
+		cfg.Config,
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
-
 	cmd.Version = version
+
 	err = cmd.Execute()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -49,13 +40,19 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, cfg *viper.Viper) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, snykCfg *cfg.Snyk) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
+
+	err := field.Validate(cfg.Config, snykCfg)
+	if err != nil {
+		return nil, err
+	}
+
 	cb, err := connector.New(ctx,
-		cfg.GetString(connector.GroupID),
-		cfg.GetString(connector.APIToken),
-		cfg.GetStringSlice(connector.OrgIDs),
-		cfg.GetString(connector.Hostname),
+		snykCfg.GroupId,
+		snykCfg.ApiToken,
+		snykCfg.OrgIds,
+		snykCfg.Hostname,
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
