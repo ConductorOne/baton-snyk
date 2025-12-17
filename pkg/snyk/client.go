@@ -337,11 +337,13 @@ func (c *Client) ListInvites(ctx context.Context, orgID string) ([]InviteRespons
 }
 
 // DeleteInvite cancels/deletes an invitation by its ID.
-func (c *Client) DeleteInvite(ctx context.Context, inviteID string) error {
-	// The delete endpoint uses the invite ID directly
-	path := fmt.Sprintf("/orgs/invites/%s", inviteID)
+func (c *Client) DeleteInvite(ctx context.Context, orgID, inviteID string) error {
+	path, err := url.JoinPath(fmt.Sprintf(RestOrgEndpoint, orgID), OrgInvitesEndpoint, inviteID)
+	if err != nil {
+		return fmt.Errorf("failed to build invite path: %w", err)
+	}
 
-	_, err := c.deleteRest(ctx, c.prepareRestURL(path))
+	_, err = c.deleteRest(ctx, c.prepareRestURL(path))
 	if err != nil {
 		return err
 	}

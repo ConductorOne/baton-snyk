@@ -112,16 +112,25 @@ func (i *invitationBuilder) CreateAccount(
 
 // Delete implements the ResourceDeleter interface - cancels/deletes an invitation.
 func (i *invitationBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
-	invitationID := resourceId.GetResource()
-	if len(invitationID) == 0 {
+	// Resource ID format is "orgID:inviteID"
+	compositeID := resourceId.GetResource()
+	if len(compositeID) == 0 {
 		return nil, fmt.Errorf("missing resource ID")
 	}
-	l := ctxzap.Extract(ctx).With(zap.String("invitationID", invitationID))
+
+	parts := strings.SplitN(compositeID, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid resource ID format, expected orgID:inviteID")
+	}
+	orgID := parts[0]
+	invitationID := parts[1]
+
+	l := ctxzap.Extract(ctx).With(zap.String("invitationID", invitationID), zap.String("orgID", orgID))
 
 	outputAnnotations := annotations.New()
 
 	// Delete the invitation
-	err := i.client.DeleteInvite(ctx, invitationID)
+	err := i.client.DeleteInvite(ctx, orgID, invitationID)
 	if err != nil {
 		l.Error("snyk-connector: delete-invitation: failed to delete invitation", zap.Error(err))
 		return outputAnnotations, err
@@ -158,7 +167,7 @@ func createInvitationResource(invite *snyk.InviteResponseData, orgID string, par
 	resource, err := rs.NewUserResource(
 		fmt.Sprintf("Invitation: %s", invite.Attributes.Email),
 		invitationResourceType,
-		invite.ID,
+		fmt.Sprintf("%s:%s", orgID, invite.ID),
 		userTraitOptions,
 		resourceOptions...,
 	)
