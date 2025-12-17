@@ -29,7 +29,7 @@ var (
 	}
 
 	// The invitation resource type is for all invitation objects.
-	// Requires the "org.user.invite" permission for both creating and deleting invitations.
+	// Requires "org.read", "org.user.read", and "org.user.invite" permissions.
 	// See: https://apidocs.snyk.io/?version=2025-11-05#post-/orgs/-org_id-/invites
 	invitationResourceType = &v2.ResourceType{
 		Id:          "invitation",
@@ -37,6 +37,8 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: annotations.New(&v2.CapabilityPermissions{
 			Permissions: []*v2.CapabilityPermission{
+				{Permission: "org.read"},
+				{Permission: "org.user.read"},
 				{Permission: "org.user.invite"},
 			},
 		}),

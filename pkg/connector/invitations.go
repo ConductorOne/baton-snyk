@@ -110,20 +110,22 @@ func (i *invitationBuilder) CreateAccount(
 	return car, nil, outputAnnotations, nil
 }
 
-// Delete implements the ResourceDeleter interface - cancels/deletes an invitation.
-func (i *invitationBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
-	// Resource ID format is "orgID:inviteID"
-	compositeID := resourceId.GetResource()
-	if len(compositeID) == 0 {
+// Delete implements the ResourceDeleterV2 interface - cancels/deletes an invitation.
+func (i *invitationBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId, parentResourceID *v2.ResourceId) (annotations.Annotations, error) {
+	invitationID := resourceId.GetResource()
+	if len(invitationID) == 0 {
 		return nil, fmt.Errorf("missing resource ID")
 	}
 
-	parts := strings.SplitN(compositeID, ":", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid resource ID format, expected orgID:inviteID")
+	if parentResourceID == nil {
+		return nil, fmt.Errorf("missing parent resource ID")
 	}
-	orgID := parts[0]
-	invitationID := parts[1]
+
+	// Extract orgID from parent resource
+	orgID := parentResourceID.GetResource()
+	if len(orgID) == 0 {
+		return nil, fmt.Errorf("missing organization ID in parent resource")
+	}
 
 	l := ctxzap.Extract(ctx).With(zap.String("invitationID", invitationID), zap.String("orgID", orgID))
 
@@ -167,7 +169,7 @@ func createInvitationResource(invite *snyk.InviteResponseData, orgID string, par
 	resource, err := rs.NewUserResource(
 		fmt.Sprintf("Invitation: %s", invite.Attributes.Email),
 		invitationResourceType,
-		fmt.Sprintf("%s:%s", orgID, invite.ID),
+		invite.ID,
 		userTraitOptions,
 		resourceOptions...,
 	)
