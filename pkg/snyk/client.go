@@ -349,40 +349,6 @@ func (c *Client) DeleteInvite(ctx context.Context, inviteID string) error {
 	return nil
 }
 
-// GetUserByID retrieves a user by their ID from the group.
-func (c *Client) GetUserByID(ctx context.Context, userID string) (*GroupUser, error) {
-	users, err := c.ListUsersInGroup(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, user := range users {
-		if user.ID == userID {
-			return &user, nil
-		}
-	}
-
-	return nil, fmt.Errorf("user with ID %s not found", userID)
-}
-
-// DeleteUser removes a user from all organizations in the group.
-// Note: Snyk API doesn't have a direct delete user endpoint, so we remove them from all orgs.
-func (c *Client) DeleteUser(ctx context.Context, userID string) error {
-	// Get all organizations
-	orgs, _, err := c.ListOrgs(ctx, NewPaginationVars("", 100))
-	if err != nil {
-		return fmt.Errorf("failed to list orgs: %w", err)
-	}
-
-	// Remove user from all organizations
-	for _, org := range orgs {
-		// Try to remove, ignore errors if user is not in org
-		_ = c.RemoveOrgMember(ctx, userID, org.ID)
-	}
-
-	return nil
-}
-
 func (c *Client) get(ctx context.Context, urlAddress *url.URL, response interface{}, vars []Vars) (string, error) {
 	return c.doRequest(ctx, urlAddress, http.MethodGet, nil, response, vars)
 }
