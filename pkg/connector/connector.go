@@ -35,6 +35,7 @@ func (s *Snyk) ResourceSyncers(_ context.Context) []connectorbuilder.ResourceSyn
 		newGroupBuilder(s.client, s.GroupID),
 		newOrgBuilder(s.client, s.Orgs),
 		newUserBuilder(s.client),
+		newInvitationBuilder(s.client, s.Orgs),
 	}
 }
 
@@ -49,6 +50,41 @@ func (s *Snyk) Metadata(_ context.Context) (*v2.ConnectorMetadata, error) {
 	return &v2.ConnectorMetadata{
 		DisplayName: "Snyk",
 		Description: "Connector syncing Snyk parent group and its organizations and users to Baton",
+		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
+			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
+				"email": {
+					DisplayName: "Email",
+					Required:    true,
+					Description: "The email address of the user to invite",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "john.doe@example.com",
+					Order:       1,
+				},
+				"org_id": {
+					DisplayName: "Organization ID",
+					Required:    true,
+					Description: "The ID of the organization to invite the user to",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Order: 2,
+				},
+				"role": {
+					DisplayName: "Role",
+					Required:    false,
+					Placeholder: snyk.OrgCollaboratorRole,
+					Description: "The role to assign to the user (defaults to collaborator)",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: v2.ConnectorAccountCreationSchema_StringField_builder{
+							DefaultValue: snyk.Ptr(snyk.OrgCollaboratorRole),
+						}.Build(),
+					},
+					Order: 3,
+				},
+			},
+		},
 	}, nil
 }
 

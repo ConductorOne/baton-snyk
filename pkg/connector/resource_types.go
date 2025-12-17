@@ -26,4 +26,11 @@ var (
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: annotationsForUserResourceType(),
 	}
+
+	// The invitation resource type is for all invitation objects.
+	invitationResourceType = &v2.ResourceType{
+		Id:          "invitation",
+		DisplayName: "Invitation",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
+	}
 )

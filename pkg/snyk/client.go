@@ -17,8 +17,10 @@ import (
 
 // API endpoints and constants for the Snyk API.
 const (
-	BaseHost = "api.snyk.io"
-	Version  = "/v1"
+	BaseHost   = "api.snyk.io"
+	Version    = "/v1"
+	RestAPI    = "/rest"
+	APIVersion = "2025-11-05"
 
 	GroupEndpoint         = "/group/%s"
 	GroupMembersEndpoint  = "/members"
@@ -28,12 +30,21 @@ const (
 
 	OrgEndpoint        = "/org/%s"
 	OrgMembersEndpoint = "/members"
+	OrgInvitesEndpoint = "/invites"
+
+	// REST API endpoints (different from v1 API).
+	RestOrgEndpoint = "/orgs/%s"
 
 	CurrentUserOrgsEndpoint = "/orgs"
 
 	OrgAdminRole        = "admin"
 	OrgCollaboratorRole = "collaborator"
 )
+
+// Ptr returns a pointer to the given string.
+func Ptr(s string) *string {
+	return &s
+}
 
 // Client is an HTTP client for interacting with the Snyk API.
 type Client struct {
@@ -68,6 +79,16 @@ func NewClient(ctx context.Context, groupID, token string, hostname string) (*Cl
 func (c *Client) prepareURL(path string) *url.URL {
 	// Passing in the version separately since it encodes '/' if present in base url
 	return c.baseURL.JoinPath(Version, path)
+}
+
+func (c *Client) prepareRestURL(path string) *url.URL {
+	// Prepare URL for REST API endpoints
+	u := c.baseURL.JoinPath(RestAPI, path)
+	// Add version query parameter
+	q := u.Query()
+	q.Set("version", APIVersion)
+	u.RawQuery = q.Encode()
+	return u
 }
 
 // ListUsersInOrg retrieves all users that are members of the specified organization.
@@ -273,12 +294,113 @@ func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, s
 	return res.Orgs, link, nil
 }
 
+// InviteUserToOrg invites a user to an organization via email.
+func (c *Client) InviteUserToOrg(ctx context.Context, orgID, email, role string) (*InviteResponse, error) {
+	path, err := url.JoinPath(fmt.Sprintf(RestOrgEndpoint, orgID), OrgInvitesEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	body := &InviteRequest{
+		Data: InviteData{
+			Type: "org_invitation",
+			Attributes: InviteAttributes{
+				Email: email,
+				Role:  role,
+			},
+		},
+	}
+
+	var response InviteResponse
+	_, err = c.postRest(ctx, c.prepareRestURL(path), body, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+// ListInvites retrieves all invitations for an organization.
+func (c *Client) ListInvites(ctx context.Context, orgID string) ([]InviteResponseData, error) {
+	path, err := url.JoinPath(fmt.Sprintf(RestOrgEndpoint, orgID), OrgInvitesEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	var response InviteListResponse
+	_, err = c.getRest(ctx, c.prepareRestURL(path), &response, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// DeleteInvite cancels/deletes an invitation by its ID.
+func (c *Client) DeleteInvite(ctx context.Context, inviteID string) error {
+	// The delete endpoint uses the invite ID directly
+	path := fmt.Sprintf("/orgs/invites/%s", inviteID)
+
+	_, err := c.deleteRest(ctx, c.prepareRestURL(path))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetUserByID retrieves a user by their ID from the group.
+func (c *Client) GetUserByID(ctx context.Context, userID string) (*GroupUser, error) {
+	users, err := c.ListUsersInGroup(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, user := range users {
+		if user.ID == userID {
+			return &user, nil
+		}
+	}
+
+	return nil, fmt.Errorf("user with ID %s not found", userID)
+}
+
+// DeleteUser removes a user from all organizations in the group.
+// Note: Snyk API doesn't have a direct delete user endpoint, so we remove them from all orgs.
+func (c *Client) DeleteUser(ctx context.Context, userID string) error {
+	// Get all organizations
+	orgs, _, err := c.ListOrgs(ctx, NewPaginationVars("", 100))
+	if err != nil {
+		return fmt.Errorf("failed to list orgs: %w", err)
+	}
+
+	// Remove user from all organizations
+	for _, org := range orgs {
+		// Try to remove, ignore errors if user is not in org
+		_ = c.RemoveOrgMember(ctx, userID, org.ID)
+	}
+
+	return nil
+}
+
 func (c *Client) get(ctx context.Context, urlAddress *url.URL, response interface{}, vars []Vars) (string, error) {
 	return c.doRequest(ctx, urlAddress, http.MethodGet, nil, response, vars)
 }
 
 func (c *Client) post(ctx context.Context, urlAddress *url.URL, body interface{}) (string, error) {
 	return c.doRequest(ctx, urlAddress, http.MethodPost, body, nil, nil)
+}
+
+func (c *Client) postRest(ctx context.Context, urlAddress *url.URL, body interface{}, response interface{}) (string, error) {
+	return c.doRestRequest(ctx, urlAddress, http.MethodPost, body, response, nil)
+}
+
+func (c *Client) getRest(ctx context.Context, urlAddress *url.URL, response interface{}, vars []Vars) (string, error) {
+	return c.doRestRequest(ctx, urlAddress, http.MethodGet, nil, response, vars)
+}
+
+func (c *Client) deleteRest(ctx context.Context, urlAddress *url.URL) (string, error) {
+	return c.doRestRequest(ctx, urlAddress, http.MethodDelete, nil, nil, nil)
 }
 
 func (c *Client) put(ctx context.Context, urlAddress *url.URL, body interface{}) (string, error) {
@@ -307,6 +429,54 @@ func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method stri
 
 	if data != nil {
 		opts = append(opts, uhttp.WithJSONBody(data), uhttp.WithContentTypeJSONHeader())
+	}
+
+	req, err := c.httpClient.NewRequest(ctx, method, urlAddress, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	errResp := &ErrorResp{}
+	doOpts := []uhttp.DoOption{
+		uhttp.WithErrorResponse(errResp),
+	}
+	if response != nil {
+		doOpts = append(doOpts, uhttp.WithJSONResponse(response))
+	}
+
+	resp, err := c.httpClient.Do(req, doOpts...)
+	if err != nil {
+		return "", err
+	}
+
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			logger := ctxzap.Extract(ctx)
+			logger.Error("failed to close response body", zap.Error(cerr))
+		}
+	}()
+
+	return resp.Header.Get("Link"), nil
+}
+
+func (c *Client) doRestRequest(ctx context.Context, urlAddress *url.URL, method string, data interface{}, response interface{}, vars []Vars) (string, error) {
+	if vars != nil {
+		query := url.Values{}
+
+		for _, pgVars := range vars {
+			pgVars.Apply(&query)
+		}
+
+		urlAddress.RawQuery = query.Encode()
+	}
+
+	opts := []uhttp.RequestOption{
+		uhttp.WithHeader("Authorization", fmt.Sprintf("token %s", c.token)),
+		uhttp.WithHeader("Accept", "application/vnd.api+json"),
+	}
+
+	if data != nil {
+		opts = append(opts, uhttp.WithJSONBody(data), uhttp.WithHeader("Content-Type", "application/vnd.api+json"))
 	}
 
 	req, err := c.httpClient.NewRequest(ctx, method, urlAddress, opts...)

@@ -19,22 +19,30 @@ func (u *userBuilder) ResourceType(_ context.Context) *v2.ResourceType {
 	return userResourceType
 }
 
-func userResource(_ context.Context, user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, error) {
+func userResource(user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": user.Name,
 		"email":       user.Email,
 		"role":        user.Role,
 	}
 
+	userTraitOptions := []rs.UserTraitOption{
+		rs.WithUserProfile(profile),
+		rs.WithEmail(user.Email, true),
+		rs.WithUserLogin(user.Email),
+	}
+
+	resourceOptions := []rs.ResourceOption{}
+	if parentID != nil {
+		resourceOptions = append(resourceOptions, rs.WithParentResourceID(parentID))
+	}
+
 	resource, err := rs.NewUserResource(
 		user.Name,
 		userResourceType,
 		user.ID,
-		[]rs.UserTraitOption{
-			rs.WithUserProfile(profile),
-			rs.WithEmail(user.Email, true),
-		},
-		rs.WithParentResourceID(parentID),
+		userTraitOptions,
+		resourceOptions...,
 	)
 	if err != nil {
 		return nil, err
@@ -57,7 +65,7 @@ func (u *userBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 	var rv []*v2.Resource
 	for _, user := range users {
 		uCopy := user
-		resource, err := userResource(ctx, &uCopy, parentResourceID)
+		resource, err := userResource(&uCopy, parentResourceID)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource: %w", err)
 		}
