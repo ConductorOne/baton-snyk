@@ -35,12 +35,15 @@ var (
 		Id:          "invitation",
 		DisplayName: "Invitation",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
-		Annotations: annotations.New(&v2.CapabilityPermissions{
-			Permissions: []*v2.CapabilityPermission{
-				{Permission: "org.read"},
-				{Permission: "org.user.read"},
-				{Permission: "org.user.invite"},
+		Annotations: annotations.New(
+			&v2.CapabilityPermissions{
+				Permissions: []*v2.CapabilityPermission{
+					{Permission: "org.read"},
+					{Permission: "org.user.read"},
+					{Permission: "org.user.invite"},
+				},
 			},
-		}),
+			&v2.SkipEntitlementsAndGrants{},
+		),
 	}
 )

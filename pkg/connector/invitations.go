@@ -223,12 +223,12 @@ func (i *invitationBuilder) List(ctx context.Context, parentResourceID *v2.Resou
 	return rv, "", nil, nil
 }
 
-// Entitlements always returns an empty slice for invitations.
+// Entitlements is required by ResourceSyncer interface. We skip entitlements and grants for invitations.
 func (i *invitationBuilder) Entitlements(_ context.Context, _ *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	return nil, "", nil, nil
 }
 
-// Grants always returns an empty slice for invitations.
+// Grants is required by ResourceSyncer interface but skipped via SkipEntitlementsAndGrants annotation.
 func (i *invitationBuilder) Grants(_ context.Context, _ *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	return nil, "", nil, nil
 }
