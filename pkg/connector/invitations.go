@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -11,6 +10,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
+	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -52,14 +52,20 @@ func (i *invitationBuilder) CreateAccount(
 	if !ok {
 		return nil, nil, outputAnnotations, fmt.Errorf("missing email in account info")
 	}
-	emailStr := email.(string)
+	emailStr, ok := email.(string)
+	if !ok {
+		return nil, nil, outputAnnotations, fmt.Errorf("email must be a string")
+	}
 
 	// Extract organization ID from account info
 	orgID, ok := pMap["org_id"]
 	if !ok {
 		return nil, nil, outputAnnotations, fmt.Errorf("missing org_id in account info")
 	}
-	orgIDStr := orgID.(string)
+	orgIDStr, ok := orgID.(string)
+	if !ok {
+		return nil, nil, outputAnnotations, fmt.Errorf("org_id must be a string")
+	}
 
 	// Get role ID - the API requires the role UUID, not the slug
 	roles, err := i.client.ListOrgRoles(ctx)
@@ -67,33 +73,41 @@ func (i *invitationBuilder) CreateAccount(
 		return nil, nil, outputAnnotations, fmt.Errorf("failed to list org roles: %w", err)
 	}
 
-	// Extract role from account info
-	roleInput := pMap["role"].(string)
+	// Extract role from account info (defaults to collaborator if not provided)
+	roleInput, ok := pMap["role"]
+	if !ok || roleInput == nil {
+		roleInput = snyk.OrgCollaboratorRole
+	}
+	roleInputStr, ok := roleInput.(string)
+	if !ok {
+		return nil, nil, outputAnnotations, fmt.Errorf("role must be a string")
+	}
 
 	// Find the role ID - check if roleInput is already a UUID or a slug
 	var roleID string
-	isUUID := len(roleInput) == 36 && strings.Contains(roleInput, "-")
+	_, parseErr := uuid.Parse(roleInputStr)
+	isUUID := parseErr == nil
 
 	if isUUID {
-		roleID = roleInput
+		roleID = roleInputStr
 	} else {
 		found := false
 		for _, role := range roles {
-			if role.Slug == roleInput {
+			if role.Slug == roleInputStr {
 				roleID = role.ID
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, nil, outputAnnotations, fmt.Errorf("role '%s' not found in organization", roleInput)
+			return nil, nil, outputAnnotations, fmt.Errorf("role '%s' not found in organization", roleInputStr)
 		}
 	}
 
 	// Invite user to organization with role ID
 	inviteResp, err := i.client.InviteUserToOrg(ctx, orgIDStr, emailStr, roleID)
 	if err != nil {
-		l.Error("snyk-connector: failed to invite user to org", zap.Error(err), zap.String("email", emailStr), zap.String("org_id", orgIDStr))
+		l.Error("snyk-connector: failed to invite user to org", zap.Error(err), zap.String("org_id", orgIDStr))
 		return nil, nil, outputAnnotations, fmt.Errorf("failed to invite user to organization: %w", err)
 	}
 
