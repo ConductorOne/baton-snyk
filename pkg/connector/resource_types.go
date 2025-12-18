@@ -2,6 +2,7 @@ package connector
 
 import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
 var (
@@ -25,5 +26,24 @@ var (
 		DisplayName: "User",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
 		Annotations: annotationsForUserResourceType(),
+	}
+
+	// The invitation resource type is for all invitation objects.
+	// Requires "org.read", "org.user.read", and "org.user.invite" permissions.
+	// See: https://apidocs.snyk.io/?version=2025-11-05#post-/orgs/-org_id-/invites
+	invitationResourceType = &v2.ResourceType{
+		Id:          "invitation",
+		DisplayName: "Invitation",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
+		Annotations: annotations.New(
+			&v2.CapabilityPermissions{
+				Permissions: []*v2.CapabilityPermission{
+					{Permission: "org.read"},
+					{Permission: "org.user.read"},
+					{Permission: "org.user.invite"},
+				},
+			},
+			&v2.SkipEntitlementsAndGrants{},
+		),
 	}
 )
