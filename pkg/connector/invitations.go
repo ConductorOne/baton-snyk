@@ -13,8 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type invitationBuilder struct {
@@ -218,15 +216,6 @@ func (i *invitationBuilder) List(ctx context.Context, parentResourceID *v2.Resou
 
 	invites, err := i.client.ListInvites(ctx, orgID)
 	if err != nil {
-		// If the error is specifically a permission denied error (403 Forbidden),
-		// return empty list instead of failing the entire sync. This ensures backward
-		// compatibility for users who don't have invitation permissions.
-		// For other errors (network issues, 500, etc.), return the error.
-		if status.Code(err) == codes.PermissionDenied {
-			l := ctxzap.Extract(ctx)
-			l.Warn("snyk-connector: missing permissions to list invitations, skipping", zap.String("org_id", orgID))
-			return nil, "", nil, nil
-		}
 		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list invitations: %w", err)
 	}
 

@@ -30,6 +30,12 @@ var (
 		field.WithDescription(`Snyk instance region hostname (defaults to "api.snyk.io").`),
 		field.WithDefaultValue(snyk.BaseHost),
 	)
+	enableInvitationsField = field.BoolField(
+		"enable-invitations",
+		field.WithDisplayName("Enable Invitations"),
+		field.WithDescription("Enable invitation resource synchronization and management. Requires 'org.read', 'org.user.read', and 'org.user.invite' permissions."),
+		field.WithDefaultValue(false),
+	)
 )
 
 //go:generate go run ./gen
@@ -41,6 +47,7 @@ var Config = field.NewConfiguration(
 		groupIDField,
 		orgIDsField,
 		hostnameField,
+		enableInvitationsField,
 	},
 	field.WithConnectorDisplayName("Snyk"),
 	field.WithHelpUrl("/docs/baton/snyk"),
