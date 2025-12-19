@@ -16,52 +16,6 @@
     },
     {
       "resourceType": {
-        "id": "invitation",
-        "displayName": "Invitation",
-        "traits": [
-          "TRAIT_USER"
-        ],
-        "annotations": [
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
-            "permissions": [
-              {
-                "permission": "org.read"
-              },
-              {
-                "permission": "org.user.read"
-              },
-              {
-                "permission": "org.user.invite"
-              }
-            ]
-          },
-          {
-            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
-          }
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC",
-        "CAPABILITY_ACCOUNT_PROVISIONING",
-        "CAPABILITY_RESOURCE_DELETE"
-      ],
-      "permissions": {
-        "permissions": [
-          {
-            "permission": "org.read"
-          },
-          {
-            "permission": "org.user.read"
-          },
-          {
-            "permission": "org.user.invite"
-          }
-        ]
-      }
-    },
-    {
-      "resourceType": {
         "id": "org",
         "displayName": "Organization",
         "traits": [
@@ -95,16 +49,7 @@
   ],
   "connectorCapabilities": [
     "CAPABILITY_PROVISION",
-    "CAPABILITY_SYNC",
-    "CAPABILITY_ACCOUNT_PROVISIONING",
-    "CAPABILITY_RESOURCE_DELETE"
+    "CAPABILITY_SYNC"
   ],
-  "credentialDetails": {
-    "capabilityAccountProvisioning": {
-      "supportedCredentialOptions": [
-        "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD"
-      ],
-      "preferredCredentialOption": "CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD"
-    }
-  }
+  "credentialDetails": {}
 }

@@ -94,6 +94,12 @@
       "stringField": {
         "defaultValue": "api.snyk.io"
       }
+    },
+    {
+      "name": "enable-invitations",
+      "displayName": "Enable Invitations",
+      "description": "Enable invitation resource synchronization and management. Requires 'org.read', 'org.user.read', and 'org.user.invite' permissions.",
+      "boolField": {}
     }
   ],
   "displayName": "Snyk",
