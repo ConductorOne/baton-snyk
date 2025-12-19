@@ -34,7 +34,7 @@ const (
 func (s *Snyk) ResourceSyncers(_ context.Context) []connectorbuilder.ResourceSyncer {
 	syncers := []connectorbuilder.ResourceSyncer{
 		newGroupBuilder(s.client, s.GroupID),
-		newOrgBuilder(s.client, s.Orgs),
+		newOrgBuilder(s.client, s.Orgs, s.EnableInvitations),
 		newUserBuilder(s.client),
 	}
 
