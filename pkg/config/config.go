@@ -23,6 +23,7 @@ var (
 		"org-ids",
 		field.WithDisplayName("Organization IDs"),
 		field.WithDescription("Limit syncing to specified organizations."),
+		field.WithStructFieldName("OrgIDs"),
 	)
 	hostnameField = field.StringField(
 		"hostname",

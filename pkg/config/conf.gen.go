@@ -6,7 +6,7 @@ import "reflect"
 type Snyk struct {
 	ApiToken string `mapstructure:"api-token"`
 	GroupId string `mapstructure:"group-id"`
-	OrgIds []string `mapstructure:"org-ids"`
+	OrgIDs []string `mapstructure:"org-ids"`
 	Hostname string `mapstructure:"hostname"`
 }
 
