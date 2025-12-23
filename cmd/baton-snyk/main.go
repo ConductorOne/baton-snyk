@@ -51,7 +51,7 @@ func getConnector(ctx context.Context, snykCfg *cfg.Snyk) (types.ConnectorServer
 	cb, err := connector.New(ctx,
 		snykCfg.GroupId,
 		snykCfg.ApiToken,
-		snykCfg.OrgIDs,
+		snykCfg.OrgIds,
 		snykCfg.Hostname,
 		snykCfg.EnableInvitations,
 	)
