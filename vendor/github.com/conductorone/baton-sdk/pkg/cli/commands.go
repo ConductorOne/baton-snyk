@@ -270,7 +270,15 @@ func MakeMainCommand[T field.Configurable](
 					connectorrunner.WithOnDemandInvokeAction(
 						v.GetString("file"),
 						v.GetString("invoke-action"),
+						v.GetString("invoke-action-resource-type"), // Optional resource type for resource-scoped actions
 						invokeActionArgsStruct,
+					))
+			case v.GetBool("list-action-schemas"):
+				opts = append(opts,
+					connectorrunner.WithActionsEnabled(),
+					connectorrunner.WithOnDemandListActionSchemas(
+						v.GetString("file"),
+						v.GetString("list-action-schemas-resource-type"), // Optional resource type filter
 					))
 			case v.GetString("delete-resource") != "":
 				opts = append(opts,
@@ -323,7 +331,7 @@ func MakeMainCommand[T field.Configurable](
 			default:
 				if len(v.GetStringSlice("sync-resources")) > 0 {
 					opts = append(opts,
-						connectorrunner.WithTargetedSyncResourceIDs(v.GetStringSlice("sync-resources")))
+						connectorrunner.WithTargetedSyncResources(v.GetStringSlice("sync-resources")))
 				}
 				if len(v.GetStringSlice("sync-resource-types")) > 0 {
 					opts = append(opts,
@@ -550,7 +558,7 @@ func MakeGRPCServerCommand[T field.Configurable](
 		}
 
 		if len(v.GetStringSlice("sync-resources")) > 0 {
-			copts = append(copts, connector.WithTargetedSyncResourceIDs(v.GetStringSlice("sync-resources")))
+			copts = append(copts, connector.WithTargetedSyncResources(v.GetStringSlice("sync-resources")))
 		}
 
 		if len(v.GetStringSlice("sync-resource-types")) > 0 {
