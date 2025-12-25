@@ -1175,7 +1175,7 @@ func (s *syncer) shouldSkipEntitlementsAndGrants(ctx context.Context, r *v2.Reso
 		ResourceTypeId: r.GetId().GetResourceType(),
 	}.Build())
 	if err != nil {
-		return false, fmt.Errorf("error getting resource type skip entitlements and grants for '%s': %w", r.GetId().GetResourceType(), err)
+		return false, err
 	}
 
 	rtAnnos := annotations.Annotations(rt.GetResourceType().GetAnnotations())
@@ -1225,7 +1225,7 @@ func (s *syncer) shouldSkipEntitlements(ctx context.Context, r *v2.Resource) (bo
 		ResourceTypeId: r.GetId().GetResourceType(),
 	}.Build())
 	if err != nil {
-		return false, fmt.Errorf("error getting resource type skip entitlements for '%s': %w", r.GetId().GetResourceType(), err)
+		return false, err
 	}
 
 	rtAnnos := annotations.Annotations(rt.GetResourceType().GetAnnotations())
