@@ -1088,7 +1088,7 @@ func (s *syncer) syncResources(ctx context.Context) error {
 
 		err = s.getSubResources(ctx, r)
 		if err != nil {
-			return fmt.Errorf("error getting sub resources for resource '%s': %w", r.GetId().GetResource(), err)
+			return err
 		}
 	}
 
@@ -1112,7 +1112,7 @@ func (s *syncer) validateResourceTraits(ctx context.Context, r *v2.Resource) err
 			ResourceTypeId: r.GetId().GetResourceType(),
 		}.Build())
 		if err != nil {
-			return fmt.Errorf("error getting resource type '%s': %w", r.GetId().GetResourceType(), err)
+			return err
 		}
 		resourceTypeTraits = resourceTypeResponse.GetResourceType().GetTraits()
 		s.resourceTypeTraits[r.GetId().GetResourceType()] = resourceTypeTraits
