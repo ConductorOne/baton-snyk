@@ -1108,10 +1108,19 @@ func (s *syncer) validateResourceTraits(ctx context.Context, r *v2.Resource) err
 
 	resourceTypeTraits, ok := s.resourceTypeTraits[r.GetId().GetResourceType()]
 	if !ok {
+		resourceTypeId := r.GetId().GetResourceType()
+		ctxzap.Extract(ctx).Debug("validateResourceTraits: fetching resource type for validation",
+			zap.String("resource_type_id", resourceTypeId),
+			zap.String("resource_id", r.GetId().GetResource()),
+			zap.String("function", "validateResourceTraits"))
 		resourceTypeResponse, err := s.store.GetResourceType(ctx, reader_v2.ResourceTypesReaderServiceGetResourceTypeRequest_builder{
-			ResourceTypeId: r.GetId().GetResourceType(),
+			ResourceTypeId: resourceTypeId,
 		}.Build())
 		if err != nil {
+			ctxzap.Extract(ctx).Error("validateResourceTraits: failed to get resource type",
+				zap.String("resource_type_id", resourceTypeId),
+				zap.String("resource_id", r.GetId().GetResource()),
+				zap.Error(err))
 			return err
 		}
 		resourceTypeTraits = resourceTypeResponse.GetResourceType().GetTraits()
@@ -1171,10 +1180,19 @@ func (s *syncer) shouldSkipEntitlementsAndGrants(ctx context.Context, r *v2.Reso
 		return skip, nil
 	}
 
+	resourceTypeId := r.GetId().GetResourceType()
+	ctxzap.Extract(ctx).Debug("shouldSkipEntitlementsAndGrants: fetching resource type",
+		zap.String("resource_type_id", resourceTypeId),
+		zap.String("resource_id", r.GetId().GetResource()),
+		zap.String("function", "shouldSkipEntitlementsAndGrants"))
 	rt, err := s.store.GetResourceType(ctx, reader_v2.ResourceTypesReaderServiceGetResourceTypeRequest_builder{
-		ResourceTypeId: r.GetId().GetResourceType(),
+		ResourceTypeId: resourceTypeId,
 	}.Build())
 	if err != nil {
+		ctxzap.Extract(ctx).Error("shouldSkipEntitlementsAndGrants: failed to get resource type",
+			zap.String("resource_type_id", resourceTypeId),
+			zap.String("resource_id", r.GetId().GetResource()),
+			zap.Error(err))
 		return false, err
 	}
 
@@ -1221,10 +1239,19 @@ func (s *syncer) shouldSkipEntitlements(ctx context.Context, r *v2.Resource) (bo
 		return skip, nil
 	}
 
+	resourceTypeId := r.GetId().GetResourceType()
+	ctxzap.Extract(ctx).Debug("shouldSkipEntitlements: fetching resource type",
+		zap.String("resource_type_id", resourceTypeId),
+		zap.String("resource_id", r.GetId().GetResource()),
+		zap.String("function", "shouldSkipEntitlements"))
 	rt, err := s.store.GetResourceType(ctx, reader_v2.ResourceTypesReaderServiceGetResourceTypeRequest_builder{
-		ResourceTypeId: r.GetId().GetResourceType(),
+		ResourceTypeId: resourceTypeId,
 	}.Build())
 	if err != nil {
+		ctxzap.Extract(ctx).Error("shouldSkipEntitlements: failed to get resource type",
+			zap.String("resource_type_id", resourceTypeId),
+			zap.String("resource_id", r.GetId().GetResource()),
+			zap.Error(err))
 		return false, err
 	}
 

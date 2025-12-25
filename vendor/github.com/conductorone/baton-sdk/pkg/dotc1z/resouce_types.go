@@ -3,8 +3,11 @@ package dotc1z
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	reader_v2 "github.com/conductorone/baton-sdk/pb/c1/reader/v2"
@@ -66,14 +69,40 @@ func (c *C1File) GetResourceType(ctx context.Context, request *reader_v2.Resourc
 	ctx, span := tracer.Start(ctx, "C1File.GetResourceType")
 	defer span.End()
 
+	l := ctxzap.Extract(ctx)
+	resourceTypeId := request.GetResourceTypeId()
+
+	l.Debug("GetResourceType: fetching resource type",
+		zap.String("resource_type_id", resourceTypeId),
+		zap.Any("annotations", request.GetAnnotations()))
+
 	ret := &v2.ResourceType{}
 	syncId, err := annotations.GetSyncIdFromAnnotations(request.GetAnnotations())
 	if err != nil {
-		return nil, fmt.Errorf("error getting sync id from annotations for resource type '%s': %w", request.GetResourceTypeId(), err)
+		stackTrace := string(debug.Stack())
+		l.Error("GetResourceType: failed to get sync id from annotations",
+			zap.String("resource_type_id", resourceTypeId),
+			zap.Error(err),
+			zap.String("stack_trace", stackTrace))
+		return nil, fmt.Errorf("error getting sync id from annotations for resource type '%s': %w\nStack trace:\n%s", resourceTypeId, err, stackTrace)
 	}
-	err = c.getConnectorObject(ctx, resourceTypes.Name(), request.GetResourceTypeId(), syncId, ret)
+
+	l.Debug("GetResourceType: calling getConnectorObject",
+		zap.String("resource_type_id", resourceTypeId),
+		zap.String("sync_id", syncId),
+		zap.String("table", resourceTypes.Name()))
+
+	err = c.getConnectorObject(ctx, resourceTypes.Name(), resourceTypeId, syncId, ret)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching resource type '%s': %w", request.GetResourceTypeId(), err)
+		stackTrace := string(debug.Stack())
+		l.Error("GetResourceType: failed to fetch resource type",
+			zap.String("resource_type_id", resourceTypeId),
+			zap.String("sync_id", syncId),
+			zap.String("table", resourceTypes.Name()),
+			zap.Error(err),
+			zap.String("stack_trace", stackTrace))
+		return nil, fmt.Errorf("error fetching resource type '%s' from table '%s' with sync_id='%s': %w\nStack trace:\n%s",
+			resourceTypeId, resourceTypes.Name(), syncId, err, stackTrace)
 	}
 
 	return reader_v2.ResourceTypesReaderServiceGetResourceTypeResponse_builder{
