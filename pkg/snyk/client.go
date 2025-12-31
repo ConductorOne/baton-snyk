@@ -17,10 +17,11 @@ import (
 
 // API endpoints and constants for the Snyk API.
 const (
-	BaseHost   = "api.snyk.io"
-	Version    = "/v1"
-	RestAPI    = "/rest"
-	APIVersion = "2025-11-05"
+	BaseHost              = "api.snyk.io"
+	Version               = "/v1"
+	RestAPI               = "/rest"
+	APIVersion            = "2025-11-05"
+	ConductorOneUserAgent = "conductorone-snyk-1.0.0"
 
 	GroupEndpoint         = "/group/%s"
 	GroupMembersEndpoint  = "/members"
@@ -393,6 +394,7 @@ func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method stri
 	opts := []uhttp.RequestOption{
 		uhttp.WithAcceptJSONHeader(),
 		uhttp.WithHeader("Authorization", fmt.Sprintf("token %s", c.token)),
+		uhttp.WithHeader("User-Agent", ConductorOneUserAgent),
 	}
 
 	if data != nil {
@@ -441,6 +443,7 @@ func (c *Client) doRestRequest(ctx context.Context, urlAddress *url.URL, method 
 	opts := []uhttp.RequestOption{
 		uhttp.WithHeader("Authorization", fmt.Sprintf("token %s", c.token)),
 		uhttp.WithHeader("Accept", "application/vnd.api+json"),
+		uhttp.WithHeader("User-Agent", ConductorOneUserAgent),
 	}
 
 	if data != nil {
