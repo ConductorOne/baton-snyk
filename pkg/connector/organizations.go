@@ -49,6 +49,7 @@ func orgResource(_ context.Context, org *snyk.Org, parentID *v2.ResourceId) (*v2
 		orgResourceType,
 		org.ID,
 		options,
+		rs.WithParentResourceID(parentID),
 		rs.WithAnnotation(
 			&v2.ChildResourceType{ResourceTypeId: invitationResourceType.Id},
 		),
