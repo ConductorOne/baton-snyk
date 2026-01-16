@@ -8,7 +8,6 @@ type Snyk struct {
 	GroupId string `mapstructure:"group-id"`
 	OrgIDs []string `mapstructure:"org-ids"`
 	Hostname string `mapstructure:"hostname"`
-	EnableInvitations bool `mapstructure:"enable-invitations"`
 }
 
 func (c *Snyk) findFieldByTag(tagValue string) (any, bool) {

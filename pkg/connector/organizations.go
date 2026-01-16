@@ -25,16 +25,15 @@ const (
 )
 
 type orgBuilder struct {
-	client            *snyk.Client
-	orgs              map[string]struct{}
-	enableInvitations bool
+	client *snyk.Client
+	orgs   map[string]struct{}
 }
 
 func (o *orgBuilder) ResourceType(_ context.Context) *v2.ResourceType {
 	return orgResourceType
 }
 
-func orgResource(_ context.Context, org *snyk.Org, parentID *v2.ResourceId, enableInvitations bool) (*v2.Resource, error) {
+func orgResource(_ context.Context, org *snyk.Org, parentID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"displayName": org.Name,
 		"slug":        org.Slug,
@@ -45,21 +44,15 @@ func orgResource(_ context.Context, org *snyk.Org, parentID *v2.ResourceId, enab
 		rs.WithGroupProfile(profile),
 	}
 
-	resourceOptions := []rs.ResourceOption{
-		rs.WithParentResourceID(parentID),
-	}
-	if enableInvitations {
-		resourceOptions = append(resourceOptions, rs.WithAnnotation(
-			&v2.ChildResourceType{ResourceTypeId: invitationResourceType.Id},
-		))
-	}
-
 	resource, err := rs.NewGroupResource(
 		org.Name,
 		orgResourceType,
 		org.ID,
 		options,
-		resourceOptions...,
+		rs.WithParentResourceID(parentID),
+		rs.WithAnnotation(
+			&v2.ChildResourceType{ResourceTypeId: invitationResourceType.Id},
+		),
 	)
 	if err != nil {
 		return nil, err
@@ -92,7 +85,7 @@ func (o *orgBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, 
 		}
 
 		orgCopy := org
-		resource, err := orgResource(ctx, &orgCopy, parentResourceID, o.enableInvitations)
+		resource, err := orgResource(ctx, &orgCopy, parentResourceID)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create org resource: %w", err)
 		}
@@ -310,15 +303,14 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 	return nil, nil
 }
 
-func newOrgBuilder(client *snyk.Client, orgs []string, enableInvitations bool) *orgBuilder {
+func newOrgBuilder(client *snyk.Client, orgs []string) *orgBuilder {
 	orgMap := make(map[string]struct{}, len(orgs))
 	for _, org := range orgs {
 		orgMap[org] = struct{}{}
 	}
 
 	return &orgBuilder{
-		client:            client,
-		orgs:              orgMap,
-		enableInvitations: enableInvitations,
+		client: client,
+		orgs:   orgMap,
 	}
 }

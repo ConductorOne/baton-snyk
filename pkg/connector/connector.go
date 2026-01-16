@@ -16,10 +16,9 @@ import (
 
 // Snyk connector manages access to Snyk groups, organizations and users.
 type Snyk struct {
-	client            *snyk.Client
-	GroupID           string
-	Orgs              []string
-	EnableInvitations bool
+	client  *snyk.Client
+	GroupID string
+	Orgs    []string
 }
 
 // Configuration field names for the Snyk connector.
@@ -32,18 +31,12 @@ const (
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
 func (s *Snyk) ResourceSyncers(_ context.Context) []connectorbuilder.ResourceSyncer {
-	syncers := []connectorbuilder.ResourceSyncer{
+	return []connectorbuilder.ResourceSyncer{
 		newGroupBuilder(s.client, s.GroupID),
-		newOrgBuilder(s.client, s.Orgs, s.EnableInvitations),
+		newOrgBuilder(s.client, s.Orgs),
 		newUserBuilder(s.client),
+		newInvitationBuilder(s.client, s.Orgs),
 	}
-
-	// Only include invitations if explicitly enabled
-	if s.EnableInvitations {
-		syncers = append(syncers, newInvitationBuilder(s.client, s.Orgs))
-	}
-
-	return syncers
 }
 
 // Asset takes an input AssetRef and attempts to fetch it using the connector's authenticated http client
@@ -107,15 +100,14 @@ func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, groupID, token string, orgs []string, hostname string, enableInvitations bool) (*Snyk, error) {
+func New(ctx context.Context, groupID, token string, orgs []string, hostname string) (*Snyk, error) {
 	client, err := snyk.NewClient(ctx, groupID, token, hostname)
 	if err != nil {
 		return nil, err
 	}
 	return &Snyk{
-		client:            client,
-		GroupID:           groupID,
-		Orgs:              orgs,
-		EnableInvitations: enableInvitations,
+		client:  client,
+		GroupID: groupID,
+		Orgs:    orgs,
 	}, nil
 }
