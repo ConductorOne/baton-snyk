@@ -15,6 +15,8 @@ import (
 	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Entitlement names for organization membership and roles.
@@ -23,6 +25,30 @@ const (
 	OrgAdminEntitlement        = "admin"
 	OrgCollaboratorEntitlement = "collaborator"
 )
+
+// isGroupAdmin returns true if the user is a group administrator. Used to return a specific
+// error when Snyk returns 404 for org role operations (group admins are not in the org member list).
+func isGroupAdmin(ctx context.Context, client *snyk.Client, userID string) bool {
+	users, err := client.ListUsersInGroup(ctx)
+	if err != nil {
+		return false
+	}
+	for _, u := range users {
+		if u.ID == userID && u.Role == AdminRole {
+			return true
+		}
+	}
+	return false
+}
+
+// orgNotFoundError returns a user-friendly error for 404 on org member/role operations. If the
+// user is a group administrator, returns a specific message; otherwise returns a generic message.
+func orgNotFoundError(client *snyk.Client, ctx context.Context, userID string, err error, groupAdminMsg, fallbackPrefix string) error {
+	if isGroupAdmin(ctx, client, userID) {
+		return fmt.Errorf("snyk-connector: %s The Snyk API rejects this operation: %w", groupAdminMsg, err)
+	}
+	return fmt.Errorf("snyk-connector: %s (404). The Snyk API rejects this operation: %w", fallbackPrefix, err)
+}
 
 type orgBuilder struct {
 	client *snyk.Client
@@ -200,24 +226,53 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 	if err != nil {
 		return nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
 	}
-	principalIsInOrg := false
-	for _, user := range users {
-		if user.ID == principal.Id.Resource {
-			principalIsInOrg = true
+	var currentUser *snyk.OrgUser
+	for i := range users {
+		if users[i].ID == principal.Id.Resource {
+			currentUser = &users[i]
 			break
 		}
 	}
-	if !principalIsInOrg {
+	if currentUser == nil {
 		err := o.client.AddOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return nil, orgNotFoundError(o.client, ctx, principal.Id.Resource, err,
+					"Snyk does not allow adding this user to the organization. "+
+						"Group administrators already have access to all organizations and cannot be "+
+						"added as org members via the API.",
+					"failed to add user to org")
+			}
 			return nil, fmt.Errorf("snyk-connector: failed to add user to org: %w", err)
 		}
 
 		return nil, nil
 	}
 
+	// Grant membership entitlement ("member"): user is already in org, nothing to do
+	if roleID == OrgMemberEntitlement {
+		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
+	}
+
+	// GrantAlreadyExists: user already has the requested role
+	roles, err := o.client.ListOrgRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+	}
+	rI := slices.IndexFunc(roles, func(r snyk.Role) bool { return r.ID == roleID })
+	if rI >= 0 && roles[rI].Slug == currentUser.Role {
+		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
+	}
+
 	err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, orgNotFoundError(o.client, ctx, principal.Id.Resource, err,
+				"Snyk does not allow assigning or changing this user's org role. "+
+					"Group administrators already have full access to all organizations and their "+
+					"org-level role cannot be changed via the API.",
+				"failed to update user role in org")
+		}
 		return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
 	}
 
@@ -244,59 +299,72 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 	if err != nil {
 		return nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
 	}
-	principalIsInOrg := false
-	for _, user := range users {
-		if user.ID == principal.Id.Resource {
-			principalIsInOrg = true
+	var currentUser *snyk.OrgUser
+	for i := range users {
+		if users[i].ID == principal.Id.Resource {
+			currentUser = &users[i]
 			break
 		}
 	}
 
-	if principalIsInOrg {
+	// GrantAlreadyRevoked: user is not in the org, nothing to revoke
+	if currentUser == nil {
+		return annotations.New(v2.GrantAlreadyRevoked_builder{}.Build()), nil
+	}
+
+	parts := strings.Split(entitlement.Id, ":")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("snyk-connector: invalid entitlement id: %s", entitlement.Id)
+	}
+	roleOrMemberID := parts[2]
+
+	// Revoking membership entitlement ("member"): remove user from org
+	if roleOrMemberID == OrgMemberEntitlement {
 		err := o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
-	} else {
-		parts := strings.Split(entitlement.Id, ":")
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("snyk-connector: invalid entitlement id: %s", entitlement.Id)
-		}
-		rolePublicID := parts[2]
-		roles, err := o.client.ListOrgRoles(ctx)
+		return nil, nil
+	}
+
+	roles, err := o.client.ListOrgRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+	}
+
+	// check if the role is a valid role
+	rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+		return r.ID == roleOrMemberID
+	})
+	if rI == -1 {
+		return nil, fmt.Errorf("snyk-connector: role %s not found", roleOrMemberID)
+	}
+
+	// GrantAlreadyRevoked: user does not have the role we're revoking
+	if currentUser.Role != roles[rI].Slug {
+		return annotations.New(v2.GrantAlreadyRevoked_builder{}.Build()), nil
+	}
+
+	// find minimal default role collaborator
+	cI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+		return r.Slug == OrgCollaboratorEntitlement
+	})
+	if cI == -1 {
+		return nil, fmt.Errorf("snyk-connector: minimal default role %s not found", OrgCollaboratorEntitlement)
+	}
+
+	collaborator := roles[cI]
+	if roleOrMemberID == collaborator.ID {
+		// if we're revoking collaborator role - remove from org
+		err = o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
-			return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
-
-		// check if the role is a valid role
-		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
-			return r.ID == rolePublicID
-		})
-		if rI == -1 {
-			return nil, fmt.Errorf("snyk-connector: role %s not found", rolePublicID)
-		}
-
-		// find minimal default role collaborator
-		cI := slices.IndexFunc(roles, func(r snyk.Role) bool {
-			return r.Slug == OrgCollaboratorEntitlement
-		})
-		if cI == -1 {
-			return nil, fmt.Errorf("snyk-connector: minimal default role %s not found", OrgCollaboratorEntitlement)
-		}
-
-		collaborator := roles[cI]
-		if rolePublicID == collaborator.ID {
-			// if we're revoking collaborator role - remove from org
-			err = o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
-			if err != nil {
-				return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
-			}
-		} else {
-			// if we're revoking admin or other role - rollback to minimal role collaborator
-			err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, collaborator.ID)
-			if err != nil {
-				return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
-			}
+	} else {
+		// if we're revoking admin or other role - rollback to minimal role collaborator
+		err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, collaborator.ID)
+		if err != nil {
+			return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
 		}
 	}
 
