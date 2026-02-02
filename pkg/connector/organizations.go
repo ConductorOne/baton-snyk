@@ -238,6 +238,16 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 		}
 	}
 	if currentUser == nil {
+		if roleID != OrgMemberEntitlement {
+			roles, listErr := o.client.ListOrgRoles(ctx)
+			if listErr != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", listErr)
+			}
+			rI := slices.IndexFunc(roles, func(r snyk.Role) bool { return r.ID == roleID })
+			if rI < 0 {
+				return nil, fmt.Errorf("snyk-connector: role %s not found", roleID)
+			}
+		}
 		err := o.client.AddOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
@@ -249,16 +259,7 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 			}
 			return nil, fmt.Errorf("snyk-connector: failed to add user to org: %w", err)
 		}
-		// Apply requested role when not just membership (AddOrgMember adds as collaborator by default)
 		if roleID != OrgMemberEntitlement {
-			roles, listErr := o.client.ListOrgRoles(ctx)
-			if listErr != nil {
-				return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", listErr)
-			}
-			rI := slices.IndexFunc(roles, func(r snyk.Role) bool { return r.ID == roleID })
-			if rI < 0 {
-				return nil, fmt.Errorf("snyk-connector: role %s not found", roleID)
-			}
 			err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
 			if err != nil {
 				if status.Code(err) == codes.NotFound {
