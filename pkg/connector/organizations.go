@@ -28,26 +28,30 @@ const (
 
 // isGroupAdmin returns true if the user is a group administrator. Used to return a specific
 // error when Snyk returns 404 for org role operations (group admins are not in the org member list).
-func isGroupAdmin(ctx context.Context, client *snyk.Client, userID string) bool {
+// When ListUsersInGroup fails (e.g. rate limit, auth), returns (false, err) so the caller can
+// avoid treating it as "not group admin" and use a generic message instead.
+func isGroupAdmin(ctx context.Context, client *snyk.Client, userID string) (bool, error) {
 	users, err := client.ListUsersInGroup(ctx)
 	if err != nil {
-		return false
+		return false, err
 	}
 	for _, u := range users {
 		if u.ID == userID && u.Role == AdminRole {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // orgNotFoundError returns a user-friendly error for 404 on org member/role operations. If the
 // user is a group administrator, returns a specific message; otherwise returns a generic message.
+// When we cannot determine group admin status (e.g. ListUsersInGroup fails), uses the generic message.
 func orgNotFoundError(client *snyk.Client, ctx context.Context, userID string, err error, groupAdminMsg, fallbackPrefix string) error {
-	if isGroupAdmin(ctx, client, userID) {
+	isAdmin, checkErr := isGroupAdmin(ctx, client, userID)
+	if checkErr == nil && isAdmin {
 		return fmt.Errorf("snyk-connector: %s The Snyk API rejects this operation: %w", groupAdminMsg, err)
 	}
-	return fmt.Errorf("snyk-connector: %s (404). The Snyk API rejects this operation: %w", fallbackPrefix, err)
+	return fmt.Errorf("snyk-connector: %s The Snyk API rejects this operation: %w", fallbackPrefix, err)
 }
 
 type orgBuilder struct {
@@ -245,7 +249,28 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 			}
 			return nil, fmt.Errorf("snyk-connector: failed to add user to org: %w", err)
 		}
-
+		// Apply requested role when not just membership (AddOrgMember adds as collaborator by default)
+		if roleID != OrgMemberEntitlement {
+			roles, listErr := o.client.ListOrgRoles(ctx)
+			if listErr != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", listErr)
+			}
+			rI := slices.IndexFunc(roles, func(r snyk.Role) bool { return r.ID == roleID })
+			if rI < 0 {
+				return nil, fmt.Errorf("snyk-connector: role %s not found", roleID)
+			}
+			err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
+			if err != nil {
+				if status.Code(err) == codes.NotFound {
+					return nil, orgNotFoundError(o.client, ctx, principal.Id.Resource, err,
+						"Snyk does not allow assigning or changing this user's org role. "+
+							"Group administrators already have full access to all organizations and their "+
+							"org-level role cannot be changed via the API.",
+						"failed to update user role in org")
+				}
+				return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
+			}
+		}
 		return nil, nil
 	}
 
@@ -254,13 +279,17 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
 	}
 
-	// GrantAlreadyExists: user already has the requested role
+	// Validate role exists before UpdateOrgRole
 	roles, err := o.client.ListOrgRoles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
 	}
 	rI := slices.IndexFunc(roles, func(r snyk.Role) bool { return r.ID == roleID })
-	if rI >= 0 && roles[rI].Slug == currentUser.Role {
+	if rI < 0 {
+		return nil, fmt.Errorf("snyk-connector: role %s not found", roleID)
+	}
+	// GrantAlreadyExists: user already has the requested role
+	if roles[rI].Slug == currentUser.Role {
 		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
 	}
 
