@@ -43,7 +43,14 @@ func isGroupAdmin(ctx context.Context, client *snyk.Client, userID string) (bool
 	return false, nil
 }
 
-// orgNotFoundError returns a user-friendly error for 404 on org member/role operations. If the
+// is422InvalidUser reports whether the error is Snyk's 422 "Invalid user ID supplied" (e.g. when
+// operating on a group admin via the org API). The SDK maps 422 to codes.Unknown so we check the message.
+func is422InvalidUser(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "422") || strings.Contains(s, "Invalid user ID")
+}
+
+// orgNotFoundError returns a user-friendly error for 404 or 422 on org member/role operations. If the
 // user is a group administrator, returns a specific message; otherwise returns a generic message.
 // When we cannot determine group admin status (e.g. ListUsersInGroup fails), uses the generic message.
 func orgNotFoundError(client *snyk.Client, ctx context.Context, userID string, err error, groupAdminMsg, fallbackPrefix string) error {
@@ -352,6 +359,12 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 	if roleOrMemberID == OrgMemberEntitlement {
 		err := o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
+			if is422InvalidUser(err) {
+				return nil, orgNotFoundError(o.client, ctx, principal.Id.Resource, err,
+					"Snyk does not allow removing this user from the organization. "+
+						"Group administrators cannot be removed via the API.",
+					"failed to remove user from org")
+			}
 			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
 		return nil, nil
@@ -388,12 +401,25 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 		// if we're revoking collaborator role - remove from org
 		err = o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
+			if is422InvalidUser(err) {
+				return nil, orgNotFoundError(o.client, ctx, principal.Id.Resource, err,
+					"Snyk does not allow removing this user from the organization. "+
+						"Group administrators cannot be removed via the org API.",
+					"failed to remove user from org")
+			}
 			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
 	} else {
 		// if we're revoking admin or other role - rollback to minimal role collaborator
 		err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, collaborator.ID)
 		if err != nil {
+			if is422InvalidUser(err) {
+				return nil, orgNotFoundError(o.client, ctx, principal.Id.Resource, err,
+					"Snyk does not allow assigning or changing this user's org role. "+
+						"Group administrators already have full access to all organizations and their "+
+						"org-level role cannot be changed via the API.",
+					"failed to update user role in org")
+			}
 			return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
 		}
 	}
