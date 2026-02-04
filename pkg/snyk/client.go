@@ -141,25 +141,6 @@ func (c *Client) ListOrgMemberships(ctx context.Context, orgID string) (*OrgMemb
 	return &response, nil
 }
 
-// GetGroupMembershipByUser returns the group membership for the given user, if any, using the REST API
-// GET /groups/{group_id}/memberships with the user_id filter. This avoids listing all group members when
-// only one user's membership (e.g. to check if they are group admin) is needed.
-// See https://apidocs.snyk.io/?version=2025-11-05#get-/groups/-group_id-/memberships
-func (c *Client) GetGroupMembershipByUser(ctx context.Context, userID string) (*GroupMembershipListResponse, error) {
-	path := fmt.Sprintf(RestGroupMembershipsPath, c.groupID)
-	u := c.prepareRestURL(path)
-	q := u.Query()
-	q.Set("user_id", userID)
-	u.RawQuery = q.Encode()
-
-	var response GroupMembershipListResponse
-	_, err := c.getRest(ctx, u, &response, nil)
-	if err != nil {
-		return nil, err
-	}
-	return &response, nil
-}
-
 // GetGroupDetails retrieves metadata about the configured group.
 func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
 	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
