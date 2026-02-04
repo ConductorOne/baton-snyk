@@ -218,7 +218,7 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	return orgRoles, nil
 }
 
-// GetOrgRole retrieves a single org role by ID using the REST API
+// GetOrgRole retrieves a single org role by ID using the REST API.
 func (c *Client) GetOrgRole(ctx context.Context, roleID string) (*Role, error) {
 	path := fmt.Sprintf(RestTenantRolePath, c.groupID, roleID)
 	u := c.prepareRestURL(path)
