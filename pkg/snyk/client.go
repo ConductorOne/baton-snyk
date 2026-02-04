@@ -34,7 +34,9 @@ const (
 	OrgInvitesEndpoint = "/invites"
 
 	// REST API endpoints (different from v1 API).
-	RestOrgEndpoint = "/orgs/%s"
+	RestOrgEndpoint          = "/orgs/%s"
+	RestGroupMembershipsPath = "groups/%s/memberships"
+	RestOrgMembershipsPath   = "orgs/%s/memberships"
 
 	CurrentUserOrgsEndpoint = "/orgs"
 
@@ -122,6 +124,39 @@ func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	}
 
 	return users, nil
+}
+
+// ListOrgMemberships returns org memberships from the REST API GET /orgs/{org_id}/memberships.
+// Returns only actual org members (no group admins); each item has user id and role id for grants.
+func (c *Client) ListOrgMemberships(ctx context.Context, orgID string) (*OrgMembershipListResponse, error) {
+	path := fmt.Sprintf(RestOrgMembershipsPath, orgID)
+	u := c.prepareRestURL(path)
+
+	var response OrgMembershipListResponse
+	_, err := c.getRest(ctx, u, &response, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+// GetGroupMembershipByUser returns the group membership for the given user, if any, using the REST API
+// GET /groups/{group_id}/memberships with the user_id filter. This avoids listing all group members when
+// only one user's membership (e.g. to check if they are group admin) is needed.
+// See https://apidocs.snyk.io/?version=2025-11-05#get-/groups/-group_id-/memberships
+func (c *Client) GetGroupMembershipByUser(ctx context.Context, userID string) (*GroupMembershipListResponse, error) {
+	path := fmt.Sprintf(RestGroupMembershipsPath, c.groupID)
+	u := c.prepareRestURL(path)
+	q := u.Query()
+	q.Set("user_id", userID)
+	u.RawQuery = q.Encode()
+
+	var response GroupMembershipListResponse
+	_, err := c.getRest(ctx, u, &response, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
 }
 
 // GetGroupDetails retrieves metadata about the configured group.
