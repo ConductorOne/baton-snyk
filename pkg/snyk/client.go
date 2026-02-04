@@ -37,6 +37,7 @@ const (
 	RestOrgEndpoint          = "/orgs/%s"
 	RestGroupMembershipsPath = "groups/%s/memberships"
 	RestOrgMembershipsPath   = "orgs/%s/memberships"
+	RestTenantRolePath       = "tenants/%s/roles/%s"
 
 	CurrentUserOrgsEndpoint = "/orgs"
 
@@ -234,6 +235,31 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	}
 
 	return orgRoles, nil
+}
+
+// GetOrgRole retrieves a single org role by ID using the REST API
+func (c *Client) GetOrgRole(ctx context.Context, roleID string) (*Role, error) {
+	path := fmt.Sprintf(RestTenantRolePath, c.groupID, roleID)
+	u := c.prepareRestURL(path)
+
+	var response RestRoleResponse
+	_, err := c.getRest(ctx, u, &response, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	role := &Role{
+		ID:          response.Data.ID,
+		Name:        response.Data.Attributes.Name,
+		Description: response.Data.Attributes.Description,
+	}
+	if err := c.parseRole(role); err != nil {
+		return nil, fmt.Errorf("failed to parse role: %w", err)
+	}
+	if role.Type != OrgRoleType {
+		return nil, fmt.Errorf("role %s is not an org role (type %s)", roleID, role.Type)
+	}
+	return role, nil
 }
 
 // AddMemberBody represents the request body for adding a member to an organization.

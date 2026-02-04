@@ -58,6 +58,24 @@ type Role struct {
 	Type        string
 }
 
+// RestRoleResponse is the REST API response for GET /tenants/{tenant_id}/roles/{role_id}.
+type RestRoleResponse struct {
+	Data RestRoleData `json:"data"`
+}
+
+// RestRoleData is the role resource in the REST JSON:API response.
+type RestRoleData struct {
+	ID         string       `json:"id"`
+	Type       string       `json:"type"`
+	Attributes RestRoleAttr `json:"attributes"`
+}
+
+// RestRoleAttr contains the role attributes from the REST API.
+type RestRoleAttr struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 // ErrorResp represents an error response from the Snyk API.
 type ErrorResp struct {
 	Err string `json:"error"`
@@ -119,10 +137,10 @@ type GroupMembershipListResponse struct {
 // GroupMembershipData is a single group membership in the REST API response.
 // Role is under relationships.role.data.attributes.name (not in top-level attributes).
 type GroupMembershipData struct {
-	ID            string                         `json:"id"`
-	Type          string                         `json:"type"`
-	Attributes    GroupMembershipAttributes      `json:"attributes"`
-	Relationships GroupMembershipRelationships  `json:"relationships"`
+	ID            string                       `json:"id"`
+	Type          string                       `json:"type"`
+	Attributes    GroupMembershipAttributes    `json:"attributes"`
+	Relationships GroupMembershipRelationships `json:"relationships"`
 }
 
 // GroupMembershipAttributes contains created_at; role comes from relationships.role.
@@ -142,9 +160,9 @@ type GroupMembershipRoleRef struct {
 
 // GroupMembershipRoleData contains the role id, type, and attributes (name).
 type GroupMembershipRoleData struct {
-	ID         string                       `json:"id"`
-	Type       string                       `json:"type"`
-	Attributes GroupMembershipRoleAttr     `json:"attributes"`
+	ID         string                  `json:"id"`
+	Type       string                  `json:"type"`
+	Attributes GroupMembershipRoleAttr `json:"attributes"`
 }
 
 // GroupMembershipRoleAttr has the role name ("The name of the role").
@@ -160,10 +178,10 @@ type OrgMembershipListResponse struct {
 
 // OrgMembershipData is a single org membership (type "org_membership").
 type OrgMembershipData struct {
-	ID            string                        `json:"id"`
-	Type          string                        `json:"type"`
-	Attributes    OrgMembershipAttributes       `json:"attributes"`
-	Relationships OrgMembershipRelationships   `json:"relationships"`
+	ID            string                     `json:"id"`
+	Type          string                     `json:"type"`
+	Attributes    OrgMembershipAttributes    `json:"attributes"`
+	Relationships OrgMembershipRelationships `json:"relationships"`
 }
 
 // OrgMembershipAttributes has created_at.

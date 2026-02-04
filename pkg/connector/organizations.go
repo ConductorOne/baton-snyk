@@ -234,17 +234,13 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
 	}
 
-	// Validate role exists before UpdateOrgRole
-	roles, err := o.client.ListOrgRoles(ctx)
+	// Validate role exists before UpdateOrgRole (REST API GET /tenants/{tenant_id}/roles/{role_id})
+	role, err := o.client.GetOrgRole(ctx, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
-	}
-	rI := slices.IndexFunc(roles, func(r snyk.Role) bool { return r.ID == roleID })
-	if rI < 0 {
-		return nil, fmt.Errorf("snyk-connector: role %s not found", roleID)
+		return nil, fmt.Errorf("snyk-connector: role %s not found: %w", roleID, err)
 	}
 	// GrantAlreadyExists: user already has the requested role
-	if roles[rI].Slug == currentUser.Role {
+	if role.Slug == currentUser.Role {
 		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
 	}
 
