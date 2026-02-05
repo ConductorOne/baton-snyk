@@ -127,18 +127,55 @@ func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	return users, nil
 }
 
-// ListOrgMemberships returns org memberships from the REST API GET /orgs/{org_id}/memberships.
+// parseRestNextLink extracts the next page URL from a REST API Link header.
+// Link format: <url>; rel="next", <url>; rel="last". Returns empty string if no next link.
+func parseRestNextLink(linkHeader string) string {
+	if linkHeader == "" {
+		return ""
+	}
+	for _, part := range strings.Split(linkHeader, ",") {
+		part = strings.TrimSpace(part)
+		idx := strings.Index(part, ">")
+		if idx < 0 {
+			continue
+		}
+		linkURL := strings.TrimSpace(part[1:idx])
+		rest := strings.TrimSpace(part[idx+1:])
+		if strings.Contains(rest, `rel="next"`) || strings.Contains(rest, "rel=next") {
+			return linkURL
+		}
+	}
+	return ""
+}
+
+// ListOrgMemberships returns all org memberships from the REST API GET /orgs/{org_id}/memberships.
+// It follows pagination (Link header) so results are complete for orgs with more than one page (default page size is 10).
 // Returns only actual org members (no group admins); each item has user id and role id for grants.
 func (c *Client) ListOrgMemberships(ctx context.Context, orgID string) (*OrgMembershipListResponse, error) {
 	path := fmt.Sprintf(RestOrgMembershipsPath, orgID)
 	u := c.prepareRestURL(path)
+	q := u.Query()
+	q.Set("limit", "100")
+	u.RawQuery = q.Encode()
 
-	var response OrgMembershipListResponse
-	_, err := c.getRest(ctx, u, &response, nil)
-	if err != nil {
-		return nil, err
+	var allData []OrgMembershipData
+	for {
+		var response OrgMembershipListResponse
+		link, err := c.getRest(ctx, u, &response, nil)
+		if err != nil {
+			return nil, err
+		}
+		allData = append(allData, response.Data...)
+		nextURL := parseRestNextLink(link)
+		if nextURL == "" {
+			break
+		}
+		u, err = url.Parse(nextURL)
+		if err != nil {
+			return nil, fmt.Errorf("snyk: invalid next page link: %w", err)
+		}
 	}
-	return &response, nil
+	return &OrgMembershipListResponse{Data: allData}, nil
 }
 
 // GetGroupDetails retrieves metadata about the configured group.
