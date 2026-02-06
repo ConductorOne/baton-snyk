@@ -12,6 +12,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-snyk/pkg/snyk"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 // Group role constants for Snyk.
@@ -137,7 +139,17 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 		// Check if there are more pages
 		nextPage, err := parseLink(nextPageLink)
 		if err != nil {
-			// No more pages or error parsing link
+			// parseLink returns an error when there's no "next" link, which is expected at the end
+			// If it's an unexpected error, we should propagate it since pagination is critical
+			// for ensuring group admins get member grants for all organizations
+			if err.Error() != "no next link found in header" {
+				l := ctxzap.Extract(ctx)
+				l.Error("snyk-connector: error parsing pagination link",
+					zap.String("link", nextPageLink),
+					zap.Error(err))
+				return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse pagination link: %w", err)
+			}
+			// No more pages, which is expected
 			break
 		}
 		if nextPage == "" {
