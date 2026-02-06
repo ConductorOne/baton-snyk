@@ -212,16 +212,29 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 	// Only consider the user as having an org membership if they have an explicit membership,
 	// so we don't return GrantAlreadyExists for group admins.
 	if currentUser != nil {
-		memberships, _, err := o.client.ListOrgMemberships(ctx, entitlement.Resource.Id.Resource, "")
-		if err != nil {
-			return nil, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
-		}
 		hasExplicitMembership := false
-		for _, m := range memberships.Data {
-			if m.Relationships.User.Data != nil && m.Relationships.User.Data.ID == principal.Id.Resource {
-				hasExplicitMembership = true
+		pageToken := ""
+		// Iterate through all pages of memberships to find the user
+		for {
+			memberships, link, err := o.client.ListOrgMemberships(ctx, entitlement.Resource.Id.Resource, pageToken)
+			if err != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
+			}
+			for _, m := range memberships.Data {
+				if m.Relationships.User.Data != nil && m.Relationships.User.Data.ID == principal.Id.Resource {
+					hasExplicitMembership = true
+					break
+				}
+			}
+			if hasExplicitMembership {
 				break
 			}
+			// Check if there are more pages
+			nextPageURL := parseRestNextLink(link)
+			if nextPageURL == "" {
+				break
+			}
+			pageToken = nextPageURL
 		}
 		if !hasExplicitMembership {
 			currentUser = nil
