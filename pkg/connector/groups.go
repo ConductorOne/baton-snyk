@@ -26,6 +26,7 @@ var groupRoles = []string{AdminRole, MemberRole, ViewerRole}
 type groupBuilder struct {
 	client *snyk.Client
 	ID     string
+	orgs   map[string]struct{}
 }
 
 func (g *groupBuilder) ResourceType(_ context.Context) *v2.ResourceType {
@@ -104,6 +105,47 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in group: %w", err)
 	}
 
+	// Get all organizations in the group to create member grants for group admins
+	var orgResources []*v2.Resource
+	pageToken := ""
+	for {
+		orgs, nextPageLink, err := g.client.ListOrgs(ctx, snyk.NewPaginationVars(pageToken, ResourcesPageSize))
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list orgs: %w", err)
+		}
+
+		// Build org resources, applying the same filter as orgBuilder
+		for _, org := range orgs {
+			// Filter by org IDs if filter is specified
+			if _, ok := g.orgs[org.ID]; !ok && len(g.orgs) > 0 {
+				continue
+			}
+
+			orgResource, err := rs.NewGroupResource(
+				org.Name,
+				orgResourceType,
+				org.ID,
+				[]rs.GroupTraitOption{},
+				rs.WithParentResourceID(resource.Id),
+			)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create org resource: %w", err)
+			}
+			orgResources = append(orgResources, orgResource)
+		}
+
+		// Check if there are more pages
+		nextPage, err := parseLink(nextPageLink)
+		if err != nil {
+			// No more pages or error parsing link
+			break
+		}
+		if nextPage == "" {
+			break
+		}
+		pageToken = nextPage
+	}
+
 	// permission grants
 	for _, member := range members {
 		userID, err := rs.NewResourceID(userResourceType, member.ID)
@@ -112,16 +154,40 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 		}
 
 		if slices.Contains(groupRoles, member.Role) {
+			// Create the group role grant
 			rv = append(rv, grant.NewGrant(resource, member.Role, userID))
+
+			// For group admins, create "member" grants in all organizations
+			// Group admins have implicit access to all orgs in the group
+			if member.Role == AdminRole {
+				for _, orgResource := range orgResources {
+					// Create a grant with GrantImmutable annotation to mark it as immutable
+					// This ensures the grant won't be updated or revoked, since group admins
+					// have implicit access to all orgs (not explicit memberships in the API)
+					memberGrant := grant.NewGrant(
+						orgResource,
+						OrgMemberEntitlement,
+						userID,
+						grant.WithAnnotation(&v2.GrantImmutable{}),
+					)
+					rv = append(rv, memberGrant)
+				}
+			}
 		}
 	}
 
 	return rv, "", nil, nil
 }
 
-func newGroupBuilder(client *snyk.Client, id string) *groupBuilder {
+func newGroupBuilder(client *snyk.Client, id string, orgs []string) *groupBuilder {
+	orgMap := make(map[string]struct{}, len(orgs))
+	for _, org := range orgs {
+		orgMap[org] = struct{}{}
+	}
+
 	return &groupBuilder{
 		client: client,
 		ID:     id,
+		orgs:   orgMap,
 	}
 }

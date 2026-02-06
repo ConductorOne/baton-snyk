@@ -305,6 +305,36 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 		}
 	}
 
+	if currentUser != nil {
+		hasExplicitMembership := false
+		pageToken := ""
+		// Iterate through all pages of memberships to find the user
+		for {
+			memberships, link, err := o.client.ListOrgMemberships(ctx, entitlement.Resource.Id.Resource, pageToken)
+			if err != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
+			}
+			for _, m := range memberships.Data {
+				if m.Relationships.User.Data != nil && m.Relationships.User.Data.ID == principal.Id.Resource {
+					hasExplicitMembership = true
+					break
+				}
+			}
+			if hasExplicitMembership {
+				break
+			}
+			// Check if there are more pages
+			nextPageURL := parseRestNextLink(link)
+			if nextPageURL == "" {
+				break
+			}
+			pageToken = nextPageURL
+		}
+		if !hasExplicitMembership {
+			currentUser = nil
+		}
+	}
+
 	// GrantAlreadyRevoked: user is not in the org, nothing to revoke
 	if currentUser == nil {
 		return annotations.New(v2.GrantAlreadyRevoked_builder{}.Build()), nil
