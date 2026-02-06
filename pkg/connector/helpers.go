@@ -57,6 +57,27 @@ func parseLink(link string) (string, error) {
 	return url, fmt.Errorf("no next link found in header")
 }
 
+// parseRestNextLink extracts the next page URL from a REST API Link header.
+// Link format: <url>; rel="next", <url>; rel="last". Returns empty string if no next link.
+func parseRestNextLink(linkHeader string) string {
+	if linkHeader == "" {
+		return ""
+	}
+	for _, part := range strings.Split(linkHeader, ",") {
+		part = strings.TrimSpace(part)
+		idx := strings.Index(part, ">")
+		if idx < 0 {
+			continue
+		}
+		linkURL := strings.TrimSpace(part[1:idx])
+		rest := strings.TrimSpace(part[idx+1:])
+		if strings.Contains(rest, `rel="next"`) || strings.Contains(rest, "rel=next") {
+			return linkURL
+		}
+	}
+	return ""
+}
+
 func newPermissionEntitlement(resource *v2.Resource, id string, name string, entitlementOptions ...ent.EntitlementOption) *v2.Entitlement {
 	entitlement := &v2.Entitlement{
 		Id:          ent.NewEntitlementID(resource, id),

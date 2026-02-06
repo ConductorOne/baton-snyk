@@ -97,7 +97,7 @@ func (c *Client) prepareRestURL(path string) *url.URL {
 
 // ListUsersInOrg retrieves all users that are members of the specified organization.
 func (c *Client) ListUsersInOrg(ctx context.Context, orgID string) ([]OrgUser, error) {
-	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint)
+	path, err := url.JoinPath("org", orgID, OrgMembersEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (c *Client) ListUsersInOrg(ctx context.Context, orgID string) ([]OrgUser, e
 
 // ListUsersInGroup retrieves all users that are members of the configured group.
 func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
-	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupMembersEndpoint)
+	path, err := url.JoinPath("group", c.groupID, GroupMembersEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -127,60 +127,44 @@ func (c *Client) ListUsersInGroup(ctx context.Context) ([]GroupUser, error) {
 	return users, nil
 }
 
-// parseRestNextLink extracts the next page URL from a REST API Link header.
-// Link format: <url>; rel="next", <url>; rel="last". Returns empty string if no next link.
-func parseRestNextLink(linkHeader string) string {
-	if linkHeader == "" {
-		return ""
-	}
-	for _, part := range strings.Split(linkHeader, ",") {
-		part = strings.TrimSpace(part)
-		idx := strings.Index(part, ">")
-		if idx < 0 {
-			continue
-		}
-		linkURL := strings.TrimSpace(part[1:idx])
-		rest := strings.TrimSpace(part[idx+1:])
-		if strings.Contains(rest, `rel="next"`) || strings.Contains(rest, "rel=next") {
-			return linkURL
-		}
-	}
-	return ""
-}
+// ListOrgMemberships returns org memberships from the REST API GET /orgs/{org_id}/memberships.
+// If pageToken is provided, it should be a full URL to the next page. Otherwise, it starts from the first page.
+// Returns the membership data and the Link header for pagination.
+// Returns only actual org members.
+func (c *Client) ListOrgMemberships(ctx context.Context, orgID string, pageToken string) (*OrgMembershipListResponse, string, error) {
+	var u *url.URL
+	var err error
 
-// ListOrgMemberships returns all org memberships from the REST API GET /orgs/{org_id}/memberships.
-// It follows pagination (Link header) so results are complete for orgs with more than one page (default page size is 10).
-// Returns only actual org members (no group admins); each item has user id and role id for grants.
-func (c *Client) ListOrgMemberships(ctx context.Context, orgID string) (*OrgMembershipListResponse, error) {
-	path := fmt.Sprintf(RestOrgMembershipsPath, orgID)
-	u := c.prepareRestURL(path)
-	q := u.Query()
-	q.Set("limit", "100")
-	u.RawQuery = q.Encode()
-
-	var allData []OrgMembershipData
-	for {
-		var response OrgMembershipListResponse
-		link, err := c.getRest(ctx, u, &response, nil)
+	if pageToken != "" {
+		// Use the provided page token URL
+		u, err = url.Parse(pageToken)
 		if err != nil {
-			return nil, err
+			return nil, "", fmt.Errorf("snyk: invalid page token: %w", err)
 		}
-		allData = append(allData, response.Data...)
-		nextURL := parseRestNextLink(link)
-		if nextURL == "" {
-			break
-		}
-		u, err = url.Parse(nextURL)
+	} else {
+		// Start from the first page
+		path, err := url.JoinPath("orgs", orgID, "memberships")
 		if err != nil {
-			return nil, fmt.Errorf("snyk: invalid next page link: %w", err)
+			return nil, "", fmt.Errorf("failed to build memberships path: %w", err)
 		}
+		u = c.prepareRestURL(path)
+		q := u.Query()
+		q.Set("limit", "100")
+		u.RawQuery = q.Encode()
 	}
-	return &OrgMembershipListResponse{Data: allData}, nil
+
+	var response OrgMembershipListResponse
+	link, err := c.getRest(ctx, u, &response, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &response, link, nil
 }
 
 // GetGroupDetails retrieves metadata about the configured group.
 func (c *Client) GetGroupDetails(ctx context.Context) (*Group, error) {
-	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
+	path, err := url.JoinPath("group", c.groupID, GroupOrgsEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +219,7 @@ func (c *Client) filterRoles(ctx context.Context, roles []Role, roleType string)
 
 // ListOrgRoles retrieves all roles available in the organization.
 func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
-	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupRolesEndpoint)
+	path, err := url.JoinPath("group", c.groupID, GroupRolesEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -257,11 +241,14 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 
 // GetOrgRole retrieves a single org role by ID using the REST API.
 func (c *Client) GetOrgRole(ctx context.Context, roleID string) (*Role, error) {
-	path := fmt.Sprintf(RestTenantRolePath, c.groupID, roleID)
+	path, err := url.JoinPath("tenants", c.groupID, "roles", roleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build role path: %w", err)
+	}
 	u := c.prepareRestURL(path)
 
 	var response RestRoleResponse
-	_, err := c.getRest(ctx, u, &response, nil)
+	_, err = c.getRest(ctx, u, &response, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +275,7 @@ type AddMemberBody struct {
 
 // AddOrgMember adds a user to the specified organization with the collaborator role.
 func (c *Client) AddOrgMember(ctx context.Context, userID, orgID string) error {
-	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint)
+	path, err := url.JoinPath("group", c.groupID, "org", orgID, OrgMembersEndpoint)
 	if err != nil {
 		return err
 	}
@@ -308,7 +295,7 @@ func (c *Client) AddOrgMember(ctx context.Context, userID, orgID string) error {
 
 // RemoveOrgMember removes a user from the specified organization.
 func (c *Client) RemoveOrgMember(ctx context.Context, userID, orgID string) error {
-	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint, userID)
+	path, err := url.JoinPath("org", orgID, OrgMembersEndpoint, userID)
 	if err != nil {
 		return err
 	}
@@ -328,7 +315,7 @@ type UpdateRoleBody struct {
 
 // UpdateOrgRole updates the role of a user within an organization.
 func (c *Client) UpdateOrgRole(ctx context.Context, userID, orgID, roleID string) error {
-	path, err := url.JoinPath(fmt.Sprintf(OrgEndpoint, orgID), OrgMembersEndpoint, fmt.Sprintf(OrgUserUpdateEndpoint, userID))
+	path, err := url.JoinPath("org", orgID, OrgMembersEndpoint, "update", userID)
 	if err != nil {
 		return err
 	}
@@ -347,7 +334,7 @@ func (c *Client) UpdateOrgRole(ctx context.Context, userID, orgID, roleID string
 
 // ListOrgs retrieves all organizations in the configured group, with pagination support.
 func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, string, error) {
-	path, err := url.JoinPath(fmt.Sprintf(GroupEndpoint, c.groupID), GroupOrgsEndpoint)
+	path, err := url.JoinPath("group", c.groupID, GroupOrgsEndpoint)
 	if err != nil {
 		return nil, "", err
 	}
@@ -376,7 +363,7 @@ func (c *Client) ListOrgs(ctx context.Context, pgVars *PaginationVars) ([]Org, s
 
 // InviteUserToOrg invites a user to an organization via email.
 func (c *Client) InviteUserToOrg(ctx context.Context, orgID, email, role string) (*InviteResponse, error) {
-	path, err := url.JoinPath(fmt.Sprintf(RestOrgEndpoint, orgID), OrgInvitesEndpoint)
+	path, err := url.JoinPath("orgs", orgID, OrgInvitesEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +389,7 @@ func (c *Client) InviteUserToOrg(ctx context.Context, orgID, email, role string)
 
 // ListInvites retrieves all invitations for an organization.
 func (c *Client) ListInvites(ctx context.Context, orgID string) ([]InviteResponseData, error) {
-	path, err := url.JoinPath(fmt.Sprintf(RestOrgEndpoint, orgID), OrgInvitesEndpoint)
+	path, err := url.JoinPath("orgs", orgID, OrgInvitesEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +405,7 @@ func (c *Client) ListInvites(ctx context.Context, orgID string) ([]InviteRespons
 
 // DeleteInvite cancels/deletes an invitation by its ID.
 func (c *Client) DeleteInvite(ctx context.Context, orgID, inviteID string) error {
-	path, err := url.JoinPath(fmt.Sprintf(RestOrgEndpoint, orgID), OrgInvitesEndpoint, inviteID)
+	path, err := url.JoinPath("orgs", orgID, OrgInvitesEndpoint, inviteID)
 	if err != nil {
 		return fmt.Errorf("failed to build invite path: %w", err)
 	}

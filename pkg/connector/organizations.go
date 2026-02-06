@@ -139,11 +139,16 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 
 // Grants returns slice of membership and permission grants for the org.
 // Uses REST API GET /orgs/{org_id}/memberships so only actual org members appear.
-func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
 
-	resp, err := o.client.ListOrgMemberships(ctx, resource.Id.Resource)
+	bag, page, err := parsePageToken(pToken.Token, resource.Id)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	resp, link, err := o.client.ListOrgMemberships(ctx, resource.Id.Resource, page)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
 	}
@@ -164,7 +169,14 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pagin
 		rv = append(rv, grant.NewGrant(resource, m.Relationships.Role.Data.ID, userIDRes))
 	}
 
-	return rv, "", nil, nil
+	// Parse the next page link from the Link header
+	nextPageURL := parseRestNextLink(link)
+	nextToken, err := bag.NextToken(nextPageURL)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to create next page token: %w", err)
+	}
+
+	return rv, nextToken, nil, nil
 }
 
 func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
@@ -200,7 +212,7 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 	// Only consider the user as having an org membership if they have an explicit membership,
 	// so we don't return GrantAlreadyExists for group admins.
 	if currentUser != nil {
-		memberships, err := o.client.ListOrgMemberships(ctx, entitlement.Resource.Id.Resource)
+		memberships, _, err := o.client.ListOrgMemberships(ctx, entitlement.Resource.Id.Resource, "")
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
 		}
