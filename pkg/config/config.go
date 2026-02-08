@@ -31,6 +31,11 @@ var (
 		field.WithDescription(`Snyk instance region hostname (defaults to "api.snyk.io").`),
 		field.WithDefaultValue(snyk.BaseHost),
 	)
+	baseURLField = field.StringField(
+		"base-url",
+		field.WithDisplayName("Base URL"),
+		field.WithDescription("Override the Snyk API URL (for testing or enterprise deployments)"),
+	)
 )
 
 //go:generate go run ./gen
@@ -42,6 +47,7 @@ var Config = field.NewConfiguration(
 		groupIDField,
 		orgIDsField,
 		hostnameField,
+		baseURLField,
 	},
 	field.WithConnectorDisplayName("Snyk"),
 	field.WithHelpUrl("/docs/baton/snyk"),
