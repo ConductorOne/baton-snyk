@@ -1,14 +1,14 @@
 ![Baton Logo](./docs/images/baton-logo.png)
 
-# `baton-snyk` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-snyk.svg)](https://pkg.go.dev/github.com/conductorone/baton-snyk) ![main ci](https://github.com/conductorone/baton-snyk/actions/workflows/main.yaml/badge.svg)
+# `baton-snyk` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-snyk.svg)](https://pkg.go.dev/github.com/conductorone/baton-snyk) ![verify](https://github.com/conductorone/baton-snyk/actions/workflows/verify.yaml/badge.svg)
 
-`baton-snyk` is a connector for Snyk built using the [Baton SDK](https://github.com/conductorone/baton-sdk). It communicates with the Snyk API, to sync data about Snyk group, its organizations and users. 
+`baton-snyk` is a connector for Snyk built using the [Baton SDK](https://github.com/conductorone/baton-sdk). It communicates with the Snyk API, to sync data about Snyk group, its organizations and users.
 
 Check out [Baton](https://github.com/conductorone/baton) to learn more about the project in general.
 
 # Prerequisites
 
-To work with the connector, you need to have a Snyk account along the API token and Group ID that you want to synchronize. For the connector to work, the user or service account represented by the API token must have admin permissions in the group. 
+To work with the connector, you need to have a Snyk account along the API token and Group ID that you want to synchronize. For the connector to work, the user or service account represented by the API token must have admin permissions in the group.
 
 More information on how to obtain API token can be found here: https://docs.snyk.io/getting-started/how-to-obtain-and-authenticate-with-your-snyk-api-token.
 
