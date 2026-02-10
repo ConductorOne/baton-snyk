@@ -262,7 +262,7 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 
 	// Grant membership entitlement ("member"): user is already in org, nothing to do
 	if roleID == OrgMemberEntitlement {
-		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
+		return annotations.New(&v2.GrantAlreadyExists{}), nil
 	}
 
 	// Validate role exists before UpdateOrgRole (REST API GET /tenants/{tenant_id}/roles/{role_id})
@@ -272,7 +272,7 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 	}
 	// GrantAlreadyExists: user already has the requested role
 	if role.Slug == currentUser.Role {
-		return annotations.New(v2.GrantAlreadyExists_builder{}.Build()), nil
+		return annotations.New(&v2.GrantAlreadyExists{}), nil
 	}
 
 	err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
@@ -326,7 +326,7 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 
 	// GrantAlreadyRevoked: user is not in the org, nothing to revoke
 	if currentUser == nil {
-		return annotations.New(v2.GrantAlreadyRevoked_builder{}.Build()), nil
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 	}
 
 	parts := strings.Split(entitlement.Id, ":")
@@ -359,7 +359,7 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 
 	// GrantAlreadyRevoked: user does not have the role we're revoking
 	if currentUser.Role != roles[rI].Slug {
-		return annotations.New(v2.GrantAlreadyRevoked_builder{}.Build()), nil
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 	}
 
 	// find minimal default role collaborator
