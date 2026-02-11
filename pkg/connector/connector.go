@@ -32,7 +32,7 @@ const (
 // ResourceSyncers returns a ResourceSyncer for each resource type that should be synced from the upstream service.
 func (s *Snyk) ResourceSyncers(_ context.Context) []connectorbuilder.ResourceSyncer {
 	return []connectorbuilder.ResourceSyncer{
-		newGroupBuilder(s.client, s.GroupID),
+		newGroupBuilder(s.client, s.GroupID, s.Orgs),
 		newOrgBuilder(s.client, s.Orgs),
 		newUserBuilder(s.client),
 		newInvitationBuilder(s.client, s.Orgs),

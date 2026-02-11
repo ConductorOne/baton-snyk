@@ -138,44 +138,71 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 }
 
 // Grants returns slice of membership and permission grants for the org.
-func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+// Uses REST API GET /orgs/{org_id}/memberships so only actual org members appear.
+func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
 
-	members, err := o.client.ListUsersInOrg(ctx, resource.Id.Resource)
+	bag, page, err := parsePageToken(pToken.Token, resource.Id)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
+		return nil, "", nil, err
 	}
 
-	// permission grants - require finding role public id to match with entitlement
-	roles, err := o.client.ListOrgRoles(ctx)
+	resp, link, err := o.client.ListOrgMemberships(ctx, resource.Id.Resource, page)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
 	}
 
-	for _, member := range members {
-		userID, err := rs.NewResourceID(userResourceType, member.ID)
+	for _, m := range resp.Data {
+		if m.Relationships.User.Data == nil || m.Relationships.Role.Data == nil {
+			l.Debug("snyk-connector: org membership missing user or role data", zap.String("membership_id", m.ID))
+			continue
+		}
+		userIDRes, err := rs.NewResourceID(userResourceType, m.Relationships.User.Data.ID)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource id: %w", err)
 		}
 
-		// membership grants
-		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userID))
-
-		// check if the role is a valid role
-		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
-			return r.Slug == member.Role
-		})
-
-		if rI == -1 {
-			l.Warn("snyk-connector: role not found", zap.String("role", member.Role))
-			continue
-		}
-
-		rv = append(rv, grant.NewGrant(resource, roles[rI].ID, userID))
+		// membership grant (every org member has "member")
+		rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, userIDRes))
+		// permission grant (role from REST: id = role publicId)
+		rv = append(rv, grant.NewGrant(resource, m.Relationships.Role.Data.ID, userIDRes))
 	}
 
-	return rv, "", nil, nil
+	// Parse the next page link from the Link header
+	nextPageURL := parseRestNextLink(link)
+	nextToken, err := bag.NextToken(nextPageURL)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to create next page token: %w", err)
+	}
+
+	return rv, nextToken, nil, nil
+}
+
+// hasExplicitOrgMembership checks if a user has an explicit membership in an organization
+// by iterating through all pages of memberships. Returns true if found, false otherwise.
+// Group admins appear in ListUsersInOrg but not in ListOrgMemberships, so this check
+// distinguishes between explicit memberships and group admin access.
+func (o *orgBuilder) hasExplicitOrgMembership(ctx context.Context, orgID, userID string) (bool, error) {
+	pageToken := ""
+	for {
+		memberships, link, err := o.client.ListOrgMemberships(ctx, orgID, pageToken)
+		if err != nil {
+			return false, fmt.Errorf("snyk-connector: failed to list org memberships: %w", err)
+		}
+		for _, m := range memberships.Data {
+			if m.Relationships.User.Data != nil && m.Relationships.User.Data.ID == userID {
+				return true, nil
+			}
+		}
+		// Check if there are more pages
+		nextPageURL := parseRestNextLink(link)
+		if nextPageURL == "" {
+			break
+		}
+		pageToken = nextPageURL
+	}
+	return false, nil
 }
 
 func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
@@ -200,20 +227,52 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 	if err != nil {
 		return nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
 	}
-	principalIsInOrg := false
-	for _, user := range users {
-		if user.ID == principal.Id.Resource {
-			principalIsInOrg = true
+	var currentUser *snyk.OrgUser
+	for i := range users {
+		if users[i].ID == principal.Id.Resource {
+			currentUser = &users[i]
 			break
 		}
 	}
-	if !principalIsInOrg {
+	// Group admins appear in ListUsersInOrg (includeGroupAdmins) but not in ListOrgMemberships.
+	// Only consider the user as having an org membership if they have an explicit membership,
+	// so we don't return GrantAlreadyExists for group admins.
+	if currentUser != nil {
+		hasExplicitMembership, err := o.hasExplicitOrgMembership(ctx, entitlement.Resource.Id.Resource, principal.Id.Resource)
+		if err != nil {
+			return nil, err
+		}
+		if !hasExplicitMembership {
+			currentUser = nil
+		}
+	}
+	if currentUser == nil {
 		err := o.client.AddOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to add user to org: %w", err)
 		}
-
+		if roleID != OrgMemberEntitlement {
+			err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
+			if err != nil {
+				return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
+			}
+		}
 		return nil, nil
+	}
+
+	// Grant membership entitlement ("member"): user is already in org, nothing to do
+	if roleID == OrgMemberEntitlement {
+		return annotations.New(&v2.GrantAlreadyExists{}), nil
+	}
+
+	// Validate role exists before UpdateOrgRole (REST API GET /tenants/{tenant_id}/roles/{role_id})
+	role, err := o.client.GetOrgRole(ctx, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: role %s not found: %w", roleID, err)
+	}
+	// GrantAlreadyExists: user already has the requested role
+	if role.Slug == currentUser.Role {
+		return annotations.New(&v2.GrantAlreadyExists{}), nil
 	}
 
 	err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, roleID)
@@ -244,59 +303,85 @@ func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.A
 	if err != nil {
 		return nil, fmt.Errorf("snyk-connector: failed to list users in org: %w", err)
 	}
-	principalIsInOrg := false
-	for _, user := range users {
-		if user.ID == principal.Id.Resource {
-			principalIsInOrg = true
+	var currentUser *snyk.OrgUser
+	for i := range users {
+		if users[i].ID == principal.Id.Resource {
+			currentUser = &users[i]
 			break
 		}
 	}
 
-	if principalIsInOrg {
+	// Group admins appear in ListUsersInOrg (includeGroupAdmins) but not in ListOrgMemberships.
+	// Only consider the user as having an org membership if they have an explicit membership,
+	// so we don't attempt to revoke from group admins who can't have their org roles revoked.
+	if currentUser != nil {
+		hasExplicitMembership, err := o.hasExplicitOrgMembership(ctx, entitlement.Resource.Id.Resource, principal.Id.Resource)
+		if err != nil {
+			return nil, err
+		}
+		if !hasExplicitMembership {
+			currentUser = nil
+		}
+	}
+
+	// GrantAlreadyRevoked: user is not in the org, nothing to revoke
+	if currentUser == nil {
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+	}
+
+	parts := strings.Split(entitlement.Id, ":")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("snyk-connector: invalid entitlement id: %s", entitlement.Id)
+	}
+	roleOrMemberID := parts[2]
+
+	// Revoking membership entitlement ("member"): remove user from org
+	if roleOrMemberID == OrgMemberEntitlement {
 		err := o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
 			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
-	} else {
-		parts := strings.Split(entitlement.Id, ":")
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("snyk-connector: invalid entitlement id: %s", entitlement.Id)
-		}
-		rolePublicID := parts[2]
-		roles, err := o.client.ListOrgRoles(ctx)
+		return nil, nil
+	}
+
+	roles, err := o.client.ListOrgRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+	}
+
+	// check if the role is a valid role
+	rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+		return r.ID == roleOrMemberID
+	})
+	if rI == -1 {
+		return nil, fmt.Errorf("snyk-connector: role %s not found", roleOrMemberID)
+	}
+
+	// GrantAlreadyRevoked: user does not have the role we're revoking
+	if currentUser.Role != roles[rI].Slug {
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+	}
+
+	// find minimal default role collaborator
+	cI := slices.IndexFunc(roles, func(r snyk.Role) bool {
+		return r.Slug == OrgCollaboratorEntitlement
+	})
+	if cI == -1 {
+		return nil, fmt.Errorf("snyk-connector: minimal default role %s not found", OrgCollaboratorEntitlement)
+	}
+
+	collaborator := roles[cI]
+	if roleOrMemberID == collaborator.ID {
+		// if we're revoking collaborator role - remove from org
+		err = o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
 		if err != nil {
-			return nil, fmt.Errorf("snyk-connector: failed to list roles in org: %w", err)
+			return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
 		}
-
-		// check if the role is a valid role
-		rI := slices.IndexFunc(roles, func(r snyk.Role) bool {
-			return r.ID == rolePublicID
-		})
-		if rI == -1 {
-			return nil, fmt.Errorf("snyk-connector: role %s not found", rolePublicID)
-		}
-
-		// find minimal default role collaborator
-		cI := slices.IndexFunc(roles, func(r snyk.Role) bool {
-			return r.Slug == OrgCollaboratorEntitlement
-		})
-		if cI == -1 {
-			return nil, fmt.Errorf("snyk-connector: minimal default role %s not found", OrgCollaboratorEntitlement)
-		}
-
-		collaborator := roles[cI]
-		if rolePublicID == collaborator.ID {
-			// if we're revoking collaborator role - remove from org
-			err = o.client.RemoveOrgMember(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource)
-			if err != nil {
-				return nil, fmt.Errorf("snyk-connector: failed to remove user from org: %w", err)
-			}
-		} else {
-			// if we're revoking admin or other role - rollback to minimal role collaborator
-			err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, collaborator.ID)
-			if err != nil {
-				return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
-			}
+	} else {
+		// if we're revoking admin or other role - rollback to minimal role collaborator
+		err = o.client.UpdateOrgRole(ctx, principal.Id.Resource, entitlement.Resource.Id.Resource, collaborator.ID)
+		if err != nil {
+			return nil, fmt.Errorf("snyk-connector: failed to update user role in org: %w", err)
 		}
 	}
 
