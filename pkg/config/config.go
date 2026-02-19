@@ -36,6 +36,7 @@ var (
 		field.WithDisplayName("Base URL"),
 		field.WithDescription("Override the Snyk API URL (for testing or enterprise deployments)"),
 		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 )
 
