@@ -227,18 +227,18 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 
 		if member.Role == AdminRole {
 			for _, orgRes := range orgResources {
-				g := grant.NewGrant(
+				orgGrant := grant.NewGrant(
 					orgRes,
 					OrgMemberEntitlement,
 					userID,
 					grant.WithAnnotation(&v2.GrantImmutable{}),
 				)
-				g.SetSources(v2.GrantSources_builder{
+				orgGrant.SetSources(v2.GrantSources_builder{
 					Sources: map[string]*v2.GrantSources_GrantSource{
 						groupAdminEntID: {IsDirect: true},
 					},
 				}.Build())
-				rv = append(rv, g)
+				rv = append(rv, orgGrant)
 			}
 		}
 	}

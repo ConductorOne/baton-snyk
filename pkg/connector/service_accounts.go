@@ -50,6 +50,10 @@ func (s *serviceAccountBuilder) List(ctx context.Context, parentResourceID *v2.R
 		return nil, "", nil, nil
 	}
 
+	if pToken == nil {
+		pToken = &pagination.Token{}
+	}
+
 	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: serviceAccountResourceType.Id})
 	if err != nil {
 		return nil, "", nil, err
