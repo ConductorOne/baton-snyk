@@ -15,12 +15,13 @@ import (
 	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Entitlement names for organization membership and roles.
 const (
 	OrgMemberEntitlement       = "member"
-	OrgAdminEntitlement        = "admin"
 	OrgCollaboratorEntitlement = "collaborator"
 )
 
@@ -52,6 +53,7 @@ func orgResource(_ context.Context, org *snyk.Org, parentID *v2.ResourceId) (*v2
 		rs.WithParentResourceID(parentID),
 		rs.WithAnnotation(
 			&v2.ChildResourceType{ResourceTypeId: invitationResourceType.Id},
+			&v2.ChildResourceType{ResourceTypeId: serviceAccountResourceType.Id},
 		),
 	)
 	if err != nil {
@@ -121,7 +123,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 	// permission entitlements - could contain custom roles
 	roles, err := o.client.ListOrgRoles(ctx)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("failed to list roles in organization: %w", err)
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list roles in organization: %w", err)
 	}
 
 	for _, role := range roles {
@@ -138,7 +140,6 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 }
 
 // Grants returns slice of membership and permission grants for the org.
-// Uses REST API GET /orgs/{org_id}/memberships so only actual org members appear.
 func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	l := ctxzap.Extract(ctx)
 	var rv []*v2.Grant
@@ -169,11 +170,61 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 		rv = append(rv, grant.NewGrant(resource, m.Relationships.Role.Data.ID, userIDRes))
 	}
 
-	// Parse the next page link from the Link header
 	nextPageURL := parseRestNextLink(link)
 	nextToken, err := bag.NextToken(nextPageURL)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("snyk-connector: failed to create next page token: %w", err)
+	}
+
+	if nextToken == "" && resource.ParentResourceId != nil {
+		groupID := resource.ParentResourceId.Resource
+		groupAdminEntID := fmt.Sprintf("%s:%s:%s", groupResourceType.Id, groupID, AdminRole)
+
+		groupIDRes, err := rs.NewResourceID(groupResourceType, groupID)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create group resource id: %w", err)
+		}
+		rv = append(rv, grant.NewGrant(
+			resource,
+			OrgMemberEntitlement,
+			groupIDRes,
+			grant.WithAnnotation(&v2.GrantExpandable{
+				EntitlementIds: []string{groupAdminEntID},
+				Shallow:        true,
+			}),
+		))
+	}
+
+	// On the last page, emit grants for org-level service accounts.
+	if nextToken == "" {
+		saPageToken := ""
+		for {
+			saResp, saLink, err := o.client.ListOrgServiceAccounts(ctx, resource.Id.Resource, saPageToken)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("snyk-connector: failed to list org service accounts: %w", err)
+			}
+
+			for _, sa := range saResp.Data {
+				// The org SA endpoint returns group SAs too; only emit org-level grants.
+				if sa.Attributes.Level != "Org" {
+					continue
+				}
+				saIDRes, err := rs.NewResourceID(serviceAccountResourceType, sa.ID)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("snyk-connector: failed to create service account resource id: %w", err)
+				}
+
+				rv = append(rv, grant.NewGrant(resource, OrgMemberEntitlement, saIDRes))
+				if sa.Attributes.RoleID != "" {
+					rv = append(rv, grant.NewGrant(resource, sa.Attributes.RoleID, saIDRes))
+				}
+			}
+
+			saPageToken = parseRestNextLink(saLink)
+			if saPageToken == "" {
+				break
+			}
+		}
 	}
 
 	return rv, nextToken, nil, nil
@@ -284,19 +335,24 @@ func (o *orgBuilder) Grant(ctx context.Context, principal *v2.Resource, entitlem
 }
 
 func (o *orgBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	l := ctxzap.Extract(ctx)
-
 	principal := grant.Principal
 	entitlement := grant.Entitlement
 
-	if principal.Id.ResourceType != userResourceType.Id {
-		l.Debug(
-			"snyk-connector: only users can have organization entitlements revoked",
-			zap.String("principal_id", principal.Id.String()),
-			zap.String("principal_type", principal.Id.ResourceType),
-		)
+	if principal.Id.ResourceType == serviceAccountResourceType.Id {
+		// Revoking any entitlement from an org SA deletes it from the org.
+		// If the SA is not found (group SA, or already deleted), treat as already revoked.
+		err := o.client.DeleteOrgServiceAccount(ctx, entitlement.Resource.Id.Resource, principal.Id.Resource)
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+			}
+			return nil, fmt.Errorf("snyk-connector: failed to delete org service account: %w", err)
+		}
+		return nil, nil
+	}
 
-		return nil, fmt.Errorf("snyk-connector: only users can have organization entitlements revoked")
+	if principal.Id.ResourceType != userResourceType.Id {
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 	}
 
 	users, err := o.client.ListUsersInOrg(ctx, entitlement.Resource.Id.Resource)

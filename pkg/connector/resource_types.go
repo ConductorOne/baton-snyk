@@ -28,6 +28,13 @@ var (
 		Annotations: annotationsForUserResourceType(),
 	}
 
+	// The service account resource type is for all service account objects (non-human identities).
+	serviceAccountResourceType = &v2.ResourceType{
+		Id:          "service_account",
+		DisplayName: "Service Account",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_USER},
+	}
+
 	// The invitation resource type is for all invitation objects.
 	// Requires "org.read", "org.user.read", and "org.user.invite" permissions.
 	// See: https://apidocs.snyk.io/?version=2025-11-05#post-/orgs/-org_id-/invites

@@ -239,6 +239,68 @@ func (c *Client) ListOrgRoles(ctx context.Context) ([]Role, error) {
 	return orgRoles, nil
 }
 
+// ListGroupServiceAccounts lists service accounts for the configured group.
+// pageToken should be a full next-page URL from a previous Link header, or empty for the first page.
+func (c *Client) ListGroupServiceAccounts(ctx context.Context, pageToken string) (*ServiceAccountListResponse, string, error) {
+	var u *url.URL
+	var err error
+
+	if pageToken != "" {
+		u, err = url.Parse(pageToken)
+		if err != nil {
+			return nil, "", fmt.Errorf("snyk: invalid page token: %w", err)
+		}
+	} else {
+		path, err := url.JoinPath("groups", c.groupID, "service_accounts")
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to build group service accounts path: %w", err)
+		}
+		u = c.prepareRestURL(path)
+		q := u.Query()
+		q.Set("limit", "100")
+		u.RawQuery = q.Encode()
+	}
+
+	var response ServiceAccountListResponse
+	link, err := c.getRest(ctx, u, &response, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &response, link, nil
+}
+
+// ListOrgServiceAccounts lists service accounts for the given organization.
+// pageToken should be a full next-page URL from a previous Link header, or empty for the first page.
+func (c *Client) ListOrgServiceAccounts(ctx context.Context, orgID string, pageToken string) (*ServiceAccountListResponse, string, error) {
+	var u *url.URL
+	var err error
+
+	if pageToken != "" {
+		u, err = url.Parse(pageToken)
+		if err != nil {
+			return nil, "", fmt.Errorf("snyk: invalid page token: %w", err)
+		}
+	} else {
+		path, err := url.JoinPath("orgs", orgID, "service_accounts")
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to build org service accounts path: %w", err)
+		}
+		u = c.prepareRestURL(path)
+		q := u.Query()
+		q.Set("limit", "100")
+		u.RawQuery = q.Encode()
+	}
+
+	var response ServiceAccountListResponse
+	link, err := c.getRest(ctx, u, &response, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &response, link, nil
+}
+
 // GetOrgRole retrieves a single org role by ID using the REST API.
 func (c *Client) GetOrgRole(ctx context.Context, roleID string) (*Role, error) {
 	path, err := url.JoinPath("tenants", c.groupID, "roles", roleID)
@@ -403,6 +465,18 @@ func (c *Client) ListInvites(ctx context.Context, orgID string) ([]InviteRespons
 	return response.Data, nil
 }
 
+// DeleteOrgServiceAccount deletes a service account from an org via the REST API.
+// See: https://apidocs.snyk.io/?version=2025-11-05#delete-/orgs/-org_id-/service_accounts/-serviceaccount_id-
+func (c *Client) DeleteOrgServiceAccount(ctx context.Context, orgID, serviceAccountID string) error {
+	path, err := url.JoinPath("orgs", orgID, "service_accounts", serviceAccountID)
+	if err != nil {
+		return fmt.Errorf("failed to build service account path: %w", err)
+	}
+
+	_, err = c.deleteRest(ctx, c.prepareRestURL(path))
+	return err
+}
+
 // DeleteInvite cancels/deletes an invitation by its ID.
 func (c *Client) DeleteInvite(ctx context.Context, orgID, inviteID string) error {
 	path, err := url.JoinPath("orgs", orgID, OrgInvitesEndpoint, inviteID)
@@ -411,11 +485,7 @@ func (c *Client) DeleteInvite(ctx context.Context, orgID, inviteID string) error
 	}
 
 	_, err = c.deleteRest(ctx, c.prepareRestURL(path))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (c *Client) get(ctx context.Context, urlAddress *url.URL, response interface{}, vars []Vars) (string, error) {

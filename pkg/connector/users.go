@@ -64,6 +64,12 @@ func (u *userBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId,
 
 	var rv []*v2.Resource
 	for _, user := range users {
+		// Service accounts appear in the group members list with an empty email.
+		// Skip them here; they are synced as service_account resources via ListGroupServiceAccounts.
+		if user.Email == "" {
+			continue
+		}
+
 		uCopy := user
 		resource, err := userResource(&uCopy, parentResourceID)
 		if err != nil {
