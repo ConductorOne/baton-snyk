@@ -85,7 +85,7 @@ func (g *groupBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ 
 
 	for _, role := range groupRoles {
 		permissionOptions := []ent.EntitlementOption{
-			ent.WithGrantableTo(userResourceType),
+			ent.WithGrantableTo(userResourceType, serviceAccountResourceType),
 			ent.WithDisplayName(fmt.Sprintf("%s %s", resource.DisplayName, role)),
 			ent.WithDescription(fmt.Sprintf("%s role in the %s group", role, resource.DisplayName)),
 		}
@@ -180,6 +180,12 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 	groupAdminEntID := fmt.Sprintf("%s:%s:%s", groupResourceType.Id, resource.Id.Resource, AdminRole)
 
 	for _, member := range members {
+		select {
+		case <-ctx.Done():
+			return nil, "", nil, ctx.Err()
+		default:
+		}
+
 		if member.Email == "" {
 			// Only emit grants for actual group SAs; org SAs also appear in this endpoint.
 			if _, isGroupSA := groupSAIDs[member.ID]; !isGroupSA {

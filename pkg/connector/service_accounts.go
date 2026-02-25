@@ -56,7 +56,7 @@ func (s *serviceAccountBuilder) List(ctx context.Context, parentResourceID *v2.R
 
 	bag, page, err := parsePageToken(pToken.Token, &v2.ResourceId{ResourceType: serviceAccountResourceType.Id})
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse page token: %w", err)
 	}
 
 	var (
