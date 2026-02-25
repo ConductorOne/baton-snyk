@@ -144,11 +144,7 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 		default:
 		}
 
-		if member.Email == "" {
-			// Only emit grants for actual group SAs; org SAs also appear in this endpoint.
-			if _, isGroupSA := groupSAIDs[member.ID]; !isGroupSA {
-				continue
-			}
+		if _, isGroupSA := groupSAIDs[member.ID]; isGroupSA {
 			// Service account: emit group role grant directly from the resolved slug.
 			if !slices.Contains(groupRoles, member.Role) {
 				continue
@@ -161,6 +157,11 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 			if member.Role == AdminRole {
 				adminPrincipals = append(adminPrincipals, saIDRes)
 			}
+			continue
+		}
+
+		// Skip org SAs and other non-human entries that appear in the group members endpoint.
+		if member.Email == "" {
 			continue
 		}
 
