@@ -109,6 +109,12 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 	var orgResources []*v2.Resource
 	pageToken := ""
 	for {
+		select {
+		case <-ctx.Done():
+			return nil, "", nil, ctx.Err()
+		default:
+		}
+
 		orgs, nextPageLink, err := g.client.ListOrgs(ctx, snyk.NewPaginationVars(pageToken, ResourcesPageSize))
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list orgs: %w", err)
@@ -150,6 +156,12 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 	groupSAIDs := make(map[string]struct{})
 	saPageToken := ""
 	for {
+		select {
+		case <-ctx.Done():
+			return nil, "", nil, ctx.Err()
+		default:
+		}
+
 		saResp, saLink, err := g.client.ListGroupServiceAccounts(ctx, saPageToken)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list group service accounts: %w", err)

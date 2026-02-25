@@ -199,6 +199,12 @@ func (o *orgBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *
 	if nextToken == "" {
 		saPageToken := ""
 		for {
+			select {
+			case <-ctx.Done():
+				return nil, "", nil, ctx.Err()
+			default:
+			}
+
 			saResp, saLink, err := o.client.ListOrgServiceAccounts(ctx, resource.Id.Resource, saPageToken)
 			if err != nil {
 				return nil, "", nil, fmt.Errorf("snyk-connector: failed to list org service accounts: %w", err)

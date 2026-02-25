@@ -33,6 +33,7 @@ func serviceAccountResource(sa *snyk.ServiceAccountData, parentID *v2.ResourceId
 			}),
 		},
 		rs.WithParentResourceID(parentID),
+		rs.WithExternalID(&v2.ExternalId{Id: sa.ID}),
 	)
 	if err != nil {
 		return nil, err
