@@ -105,51 +105,6 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in group: %w", err)
 	}
 
-	// Collect all orgs so we can create explicit member grants for human group admins.
-	var orgResources []*v2.Resource
-	pageToken := ""
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, "", nil, ctx.Err()
-		default:
-		}
-
-		orgs, nextPageLink, err := g.client.ListOrgs(ctx, snyk.NewPaginationVars(pageToken, ResourcesPageSize))
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list orgs: %w", err)
-		}
-
-		for _, org := range orgs {
-			if _, ok := g.orgs[org.ID]; !ok && len(g.orgs) > 0 {
-				continue
-			}
-			orgRes, err := rs.NewGroupResource(
-				org.Name,
-				orgResourceType,
-				org.ID,
-				[]rs.GroupTraitOption{},
-				rs.WithParentResourceID(resource.Id),
-			)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create org resource: %w", err)
-			}
-			orgResources = append(orgResources, orgRes)
-		}
-
-		nextPage, err := parseLink(nextPageLink)
-		if err != nil {
-			if err.Error() != "no next link found in header" {
-				return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse pagination link: %w", err)
-			}
-			break
-		}
-		if nextPage == "" {
-			break
-		}
-		pageToken = nextPage
-	}
-
 	// Build an authoritative set of group SA IDs from the REST API.
 	// The v1 members endpoint returns both group SAs and org SAs (email == "").
 	// We discriminate by the "level" field: only "Group" SAs get group role grants.
@@ -179,6 +134,9 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 
 	groupAdminEntID := fmt.Sprintf("%s:%s:%s", groupResourceType.Id, resource.Id.Resource, AdminRole)
 
+	// Emit group role grants and collect admin principal IDs for org expansion.
+	// Admins are few relative to orgs, so buffering their IDs is safe.
+	var adminPrincipals []*v2.ResourceId
 	for _, member := range members {
 		select {
 		case <-ctx.Done():
@@ -200,22 +158,8 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create service account resource id: %w", err)
 			}
 			rv = append(rv, grant.NewGrant(resource, member.Role, saIDRes))
-			// Group admin SAs have implicit membership in all orgs, just like human group admins.
 			if member.Role == AdminRole {
-				for _, orgRes := range orgResources {
-					saGrant := grant.NewGrant(
-						orgRes,
-						OrgMemberEntitlement,
-						saIDRes,
-						grant.WithAnnotation(&v2.GrantImmutable{}),
-					)
-					saGrant.SetSources(v2.GrantSources_builder{
-						Sources: map[string]*v2.GrantSources_GrantSource{
-							groupAdminEntID: {IsDirect: true},
-						},
-					}.Build())
-					rv = append(rv, saGrant)
-				}
+				adminPrincipals = append(adminPrincipals, saIDRes)
 			}
 			continue
 		}
@@ -232,11 +176,48 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 		rv = append(rv, grant.NewGrant(resource, member.Role, userID))
 
 		if member.Role == AdminRole {
-			for _, orgRes := range orgResources {
+			adminPrincipals = append(adminPrincipals, userID)
+		}
+	}
+
+	pageToken := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, "", nil, ctx.Err()
+		default:
+		}
+
+		orgs, nextPageLink, err := g.client.ListOrgs(ctx, snyk.NewPaginationVars(pageToken, ResourcesPageSize))
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list orgs: %w", err)
+		}
+
+		for _, org := range orgs {
+			if _, ok := g.orgs[org.ID]; !ok && len(g.orgs) > 0 {
+				continue
+			}
+			orgRes, err := rs.NewGroupResource(
+				org.Name,
+				orgResourceType,
+				org.ID,
+				[]rs.GroupTraitOption{},
+				rs.WithParentResourceID(resource.Id),
+			)
+			if err != nil {
+				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create org resource: %w", err)
+			}
+
+			for _, principalID := range adminPrincipals {
+				select {
+				case <-ctx.Done():
+					return nil, "", nil, ctx.Err()
+				default:
+				}
 				orgGrant := grant.NewGrant(
 					orgRes,
 					OrgMemberEntitlement,
-					userID,
+					principalID,
 					grant.WithAnnotation(&v2.GrantImmutable{}),
 				)
 				orgGrant.SetSources(v2.GrantSources_builder{
@@ -247,6 +228,18 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pag
 				rv = append(rv, orgGrant)
 			}
 		}
+
+		nextPage, err := parseLink(nextPageLink)
+		if err != nil {
+			if err.Error() != "no next link found in header" {
+				return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse pagination link: %w", err)
+			}
+			break
+		}
+		if nextPage == "" {
+			break
+		}
+		pageToken = nextPage
 	}
 
 	return rv, "", nil, nil
