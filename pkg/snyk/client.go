@@ -86,12 +86,8 @@ func (c *Client) prepareURL(path string) *url.URL {
 }
 
 func (c *Client) prepareRestURL(path string) *url.URL {
-	// Prepare URL for REST API endpoints
 	u := c.baseURL.JoinPath(RestAPI, path)
-	// Add version query parameter
-	q := u.Query()
-	q.Set("version", APIVersion)
-	u.RawQuery = q.Encode()
+	withQueryParam(u, "version", APIVersion)
 	return u
 }
 
@@ -136,21 +132,17 @@ func (c *Client) ListOrgMemberships(ctx context.Context, orgID string, pageToken
 	var err error
 
 	if pageToken != "" {
-		// Use the provided page token URL
-		u, err = url.Parse(pageToken)
+		u, err = parsePageURL(pageToken)
 		if err != nil {
-			return nil, "", fmt.Errorf("snyk: invalid page token: %w", err)
+			return nil, "", err
 		}
 	} else {
-		// Start from the first page
 		path, err := url.JoinPath("orgs", orgID, "memberships")
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to build memberships path: %w", err)
 		}
 		u = c.prepareRestURL(path)
-		q := u.Query()
-		q.Set("limit", "100")
-		u.RawQuery = q.Encode()
+		withQueryParam(u, "limit", "100")
 	}
 
 	var response OrgMembershipListResponse
@@ -246,9 +238,9 @@ func (c *Client) ListGroupServiceAccounts(ctx context.Context, pageToken string)
 	var err error
 
 	if pageToken != "" {
-		u, err = url.Parse(pageToken)
+		u, err = parsePageURL(pageToken)
 		if err != nil {
-			return nil, "", fmt.Errorf("snyk: invalid page token: %w", err)
+			return nil, "", err
 		}
 	} else {
 		path, err := url.JoinPath("groups", c.groupID, "service_accounts")
@@ -256,9 +248,7 @@ func (c *Client) ListGroupServiceAccounts(ctx context.Context, pageToken string)
 			return nil, "", fmt.Errorf("failed to build group service accounts path: %w", err)
 		}
 		u = c.prepareRestURL(path)
-		q := u.Query()
-		q.Set("limit", "100")
-		u.RawQuery = q.Encode()
+		withQueryParam(u, "limit", "100")
 	}
 
 	var response ServiceAccountListResponse
@@ -277,9 +267,9 @@ func (c *Client) ListOrgServiceAccounts(ctx context.Context, orgID string, pageT
 	var err error
 
 	if pageToken != "" {
-		u, err = url.Parse(pageToken)
+		u, err = parsePageURL(pageToken)
 		if err != nil {
-			return nil, "", fmt.Errorf("snyk: invalid page token: %w", err)
+			return nil, "", err
 		}
 	} else {
 		path, err := url.JoinPath("orgs", orgID, "service_accounts")
@@ -287,9 +277,7 @@ func (c *Client) ListOrgServiceAccounts(ctx context.Context, orgID string, pageT
 			return nil, "", fmt.Errorf("failed to build org service accounts path: %w", err)
 		}
 		u = c.prepareRestURL(path)
-		q := u.Query()
-		q.Set("limit", "100")
-		u.RawQuery = q.Encode()
+		withQueryParam(u, "limit", "100")
 	}
 
 	var response ServiceAccountListResponse
