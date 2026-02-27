@@ -23,6 +23,17 @@ const (
 
 var groupRoles = []string{AdminRole, MemberRole, ViewerRole}
 
+const (
+	groupGrantPhaseSA      = "service_accounts"
+	groupGrantPhaseMembers = "members"
+)
+
+type groupGrantState struct {
+	Phase      string   `json:"phase"`
+	PageToken  string   `json:"page_token,omitempty"`
+	GroupSAIDs []string `json:"group_sa_ids,omitempty"`
+}
+
 type groupBuilder struct {
 	client *snyk.Client
 	orgs   map[string]struct{}
@@ -97,153 +108,97 @@ func (g *groupBuilder) Entitlements(_ context.Context, resource *v2.Resource, _ 
 }
 
 // Grants returns all the permission grants for a group.
-func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
-	var rv []*v2.Grant
-
-	members, err := g.client.ListUsersInGroup(ctx)
+func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+	bag, err := pagination.GenBagFromToken[groupGrantState](pToken)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in group: %w", err)
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse group grant token: %w", err)
 	}
 
-	// Build an authoritative set of group SA IDs from the REST API.
-	// The v1 members endpoint returns both group SAs and org SAs (email == "").
-	// We discriminate by the "level" field: only "Group" SAs get group role grants.
-	groupSAIDs := make(map[string]struct{})
-	saPageToken := ""
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, "", nil, ctx.Err()
-		default:
-		}
+	if bag.Current() == nil {
+		bag.Push(groupGrantState{Phase: groupGrantPhaseSA})
+	}
 
-		saResp, saLink, err := g.client.ListGroupServiceAccounts(ctx, saPageToken)
+	state := bag.Current()
+
+	switch state.Phase {
+	case groupGrantPhaseSA:
+		saResp, saLink, err := g.client.ListGroupServiceAccounts(ctx, state.PageToken)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list group service accounts: %w", err)
 		}
+
+		saIDs := make([]string, len(state.GroupSAIDs), len(state.GroupSAIDs)+len(saResp.Data))
+		copy(saIDs, state.GroupSAIDs)
 		for _, sa := range saResp.Data {
 			if sa.Attributes.Level == "Group" {
-				groupSAIDs[sa.ID] = struct{}{}
+				saIDs = append(saIDs, sa.ID)
 			}
 		}
-		saPageToken = parseRestNextLink(saLink)
-		if saPageToken == "" {
-			break
-		}
-	}
 
-	groupAdminEntID := fmt.Sprintf("%s:%s:%s", groupResourceType.Id, resource.Id.Resource, AdminRole)
-
-	// Emit group role grants and collect admin principal IDs for org expansion.
-	// Admins are few relative to orgs, so buffering their IDs is safe.
-	var adminPrincipals []*v2.ResourceId
-	for _, member := range members {
-		select {
-		case <-ctx.Done():
-			return nil, "", nil, ctx.Err()
-		default:
+		bag.Pop()
+		nextSAPage := parseRestNextLink(saLink)
+		if nextSAPage != "" {
+			bag.Push(groupGrantState{Phase: groupGrantPhaseSA, PageToken: nextSAPage, GroupSAIDs: saIDs})
+		} else {
+			bag.Push(groupGrantState{Phase: groupGrantPhaseMembers, GroupSAIDs: saIDs})
 		}
 
-		if _, isGroupSA := groupSAIDs[member.ID]; isGroupSA {
-			// Service account: emit group role grant directly from the resolved slug.
+		nextToken, err := bag.Marshal()
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to marshal group grant token: %w", err)
+		}
+		return nil, nextToken, nil, nil
+
+	case groupGrantPhaseMembers:
+		groupSAIDsSet := make(map[string]struct{}, len(state.GroupSAIDs))
+		for _, id := range state.GroupSAIDs {
+			groupSAIDsSet[id] = struct{}{}
+		}
+
+		members, err := g.client.ListUsersInGroup(ctx)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list users in group: %w", err)
+		}
+
+		var rv []*v2.Grant
+		for _, member := range members {
+			if _, isGroupSA := groupSAIDsSet[member.ID]; isGroupSA {
+				if !slices.Contains(groupRoles, member.Role) {
+					continue
+				}
+				saIDRes, err := rs.NewResourceID(serviceAccountResourceType, member.ID)
+				if err != nil {
+					return nil, "", nil, fmt.Errorf("snyk-connector: failed to create service account resource id: %w", err)
+				}
+				rv = append(rv, grant.NewGrant(resource, member.Role, saIDRes))
+				continue
+			}
+
+			// Skip org SAs and other non-human entries that appear in the group members endpoint.
+			if member.Email == "" {
+				continue
+			}
+
 			if !slices.Contains(groupRoles, member.Role) {
 				continue
 			}
-			saIDRes, err := rs.NewResourceID(serviceAccountResourceType, member.ID)
+			userID, err := rs.NewResourceID(userResourceType, member.ID)
 			if err != nil {
-				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create service account resource id: %w", err)
+				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource id: %w", err)
 			}
-			rv = append(rv, grant.NewGrant(resource, member.Role, saIDRes))
-			if member.Role == AdminRole {
-				adminPrincipals = append(adminPrincipals, saIDRes)
-			}
-			continue
+			rv = append(rv, grant.NewGrant(resource, member.Role, userID))
 		}
 
-		// Skip org SAs and other non-human entries that appear in the group members endpoint.
-		if member.Email == "" {
-			continue
-		}
-
-		userID, err := rs.NewResourceID(userResourceType, member.ID)
+		bag.Pop()
+		nextToken, err := bag.Marshal()
 		if err != nil {
-			return nil, "", nil, fmt.Errorf("snyk-connector: failed to create user resource id: %w", err)
+			return nil, "", nil, fmt.Errorf("snyk-connector: failed to marshal group grant token: %w", err)
 		}
+		return rv, nextToken, nil, nil
 
-		if !slices.Contains(groupRoles, member.Role) {
-			continue
-		}
-
-		rv = append(rv, grant.NewGrant(resource, member.Role, userID))
-
-		if member.Role == AdminRole {
-			adminPrincipals = append(adminPrincipals, userID)
-		}
+	default:
+		return nil, "", nil, fmt.Errorf("snyk-connector: unknown group grant phase: %s", state.Phase)
 	}
-
-	pageToken := ""
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, "", nil, ctx.Err()
-		default:
-		}
-
-		orgs, nextPageLink, err := g.client.ListOrgs(ctx, snyk.NewPaginationVars(pageToken, ResourcesPageSize))
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("snyk-connector: failed to list orgs: %w", err)
-		}
-
-		for _, org := range orgs {
-			if _, ok := g.orgs[org.ID]; !ok && len(g.orgs) > 0 {
-				continue
-			}
-			orgRes, err := rs.NewGroupResource(
-				org.Name,
-				orgResourceType,
-				org.ID,
-				[]rs.GroupTraitOption{},
-				rs.WithParentResourceID(resource.Id),
-			)
-			if err != nil {
-				return nil, "", nil, fmt.Errorf("snyk-connector: failed to create org resource: %w", err)
-			}
-
-			for _, principalID := range adminPrincipals {
-				select {
-				case <-ctx.Done():
-					return nil, "", nil, ctx.Err()
-				default:
-				}
-				orgGrant := grant.NewGrant(
-					orgRes,
-					OrgMemberEntitlement,
-					principalID,
-					grant.WithAnnotation(&v2.GrantImmutable{}),
-				)
-				orgGrant.SetSources(v2.GrantSources_builder{
-					Sources: map[string]*v2.GrantSources_GrantSource{
-						groupAdminEntID: {IsDirect: true},
-					},
-				}.Build())
-				rv = append(rv, orgGrant)
-			}
-		}
-
-		nextPage, err := parseLink(nextPageLink)
-		if err != nil {
-			if err.Error() != "no next link found in header" {
-				return nil, "", nil, fmt.Errorf("snyk-connector: failed to parse pagination link: %w", err)
-			}
-			break
-		}
-		if nextPage == "" {
-			break
-		}
-		pageToken = nextPage
-	}
-
-	return rv, "", nil, nil
 }
 
 func newGroupBuilder(client *snyk.Client, orgs []string) *groupBuilder {
