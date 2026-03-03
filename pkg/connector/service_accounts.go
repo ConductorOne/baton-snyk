@@ -107,7 +107,9 @@ func (s *serviceAccountBuilder) List(ctx context.Context, parentResourceID *v2.R
 	return rv, nextToken, nil, nil
 }
 
+
 // Entitlements always returns an empty slice for service accounts.
+// The serviceAccountResourceType is annotated with SkipEntitlementsAndGrants so the SDK skips these calls.
 func (s *serviceAccountBuilder) Entitlements(_ context.Context, _ *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	return nil, "", nil, nil
 }

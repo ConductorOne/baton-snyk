@@ -36,7 +36,6 @@ type groupGrantState struct {
 
 type groupBuilder struct {
 	client *snyk.Client
-	orgs   map[string]struct{}
 }
 
 func (g *groupBuilder) ResourceType(_ context.Context) *v2.ResourceType {
@@ -82,7 +81,7 @@ func (g *groupBuilder) List(ctx context.Context, _ *v2.ResourceId, _ *pagination
 
 	gr, err := groupResource(ctx, groupDetail)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, fmt.Errorf("snyk-connector: failed to create group resource: %w", err)
 	}
 
 	rv = append(rv, gr)
@@ -201,14 +200,8 @@ func (g *groupBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken
 	}
 }
 
-func newGroupBuilder(client *snyk.Client, orgs []string) *groupBuilder {
-	orgMap := make(map[string]struct{}, len(orgs))
-	for _, org := range orgs {
-		orgMap[org] = struct{}{}
-	}
-
+func newGroupBuilder(client *snyk.Client) *groupBuilder {
 	return &groupBuilder{
 		client: client,
-		orgs:   orgMap,
 	}
 }
