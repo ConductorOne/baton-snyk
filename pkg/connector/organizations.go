@@ -113,7 +113,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 
 	// membership entitlements
 	assignmentOptions := []ent.EntitlementOption{
-		ent.WithGrantableTo(userResourceType),
+		ent.WithGrantableTo(userResourceType, serviceAccountResourceType),
 		ent.WithDisplayName(fmt.Sprintf("%s %s", resource.DisplayName, OrgMemberEntitlement)),
 		ent.WithDescription(fmt.Sprintf("Member of the %s organization", resource.DisplayName)),
 	}
@@ -128,7 +128,7 @@ func (o *orgBuilder) Entitlements(ctx context.Context, resource *v2.Resource, _ 
 
 	for _, role := range roles {
 		permissionOptions := []ent.EntitlementOption{
-			ent.WithGrantableTo(userResourceType),
+			ent.WithGrantableTo(userResourceType, serviceAccountResourceType),
 			ent.WithDisplayName(role.Name),
 			ent.WithDescription(role.Description),
 		}
