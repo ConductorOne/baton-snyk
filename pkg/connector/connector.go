@@ -100,8 +100,8 @@ func (s *Snyk) Validate(ctx context.Context) (annotations.Annotations, error) {
 }
 
 // New returns a new instance of the connector.
-func New(ctx context.Context, groupID, token string, orgs []string, hostname string) (*Snyk, error) {
-	client, err := snyk.NewClient(ctx, groupID, token, hostname)
+func New(ctx context.Context, groupID, token string, orgs []string, hostname string, baseURL string) (*Snyk, error) {
+	client, err := snyk.NewClient(ctx, groupID, token, hostname, baseURL)
 	if err != nil {
 		return nil, err
 	}

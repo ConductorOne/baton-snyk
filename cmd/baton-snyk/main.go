@@ -53,6 +53,7 @@ func getConnector(ctx context.Context, snykCfg *cfg.Snyk) (types.ConnectorServer
 		snykCfg.ApiToken,
 		snykCfg.OrgIDs,
 		snykCfg.Hostname,
+		snykCfg.BaseUrl,
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))

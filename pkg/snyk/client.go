@@ -59,7 +59,8 @@ type Client struct {
 }
 
 // NewClient creates a new Snyk API client authenticated with the provided token.
-func NewClient(ctx context.Context, groupID, token string, hostname string) (*Client, error) {
+// If baseURL is provided, it overrides the hostname for URL construction.
+func NewClient(ctx context.Context, groupID, token string, hostname string, baseURL string) (*Client, error) {
 	l := ctxzap.Extract(ctx)
 	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, l))
 	if err != nil {
@@ -67,9 +68,17 @@ func NewClient(ctx context.Context, groupID, token string, hostname string) (*Cl
 	}
 	wrapper := uhttp.NewBaseHttpClient(httpClient)
 
-	base := &url.URL{
-		Scheme: "https",
-		Host:   hostname,
+	var base *url.URL
+	if baseURL != "" {
+		base, err = url.Parse(baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid base URL: %w", err)
+		}
+	} else {
+		base = &url.URL{
+			Scheme: "https",
+			Host:   hostname,
+		}
 	}
 
 	return &Client{
