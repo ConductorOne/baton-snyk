@@ -76,6 +76,24 @@
     },
     {
       "resourceType":  {
+        "id":  "service_account",
+        "displayName":  "Service Account",
+        "traits":  [
+          "TRAIT_USER"
+        ],
+        "annotations":  [
+          {
+            "@type":  "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          }
+        ]
+      },
+      "capabilities":  [
+        "CAPABILITY_SYNC"
+      ],
+      "permissions":  {}
+    },
+    {
+      "resourceType":  {
         "id":  "user",
         "displayName":  "User",
         "traits":  [
