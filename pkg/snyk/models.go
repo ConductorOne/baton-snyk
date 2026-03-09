@@ -128,48 +128,6 @@ type InviteListResponse struct {
 	Data []InviteResponseData `json:"data"`
 }
 
-// GroupMembershipListResponse is the REST API response for GET /groups/{group_id}/memberships.
-// See https://apidocs.snyk.io/?version=2025-11-05#get-/groups/-group_id-/memberships
-type GroupMembershipListResponse struct {
-	Data []GroupMembershipData `json:"data"`
-}
-
-// GroupMembershipData is a single group membership in the REST API response.
-// Role is under relationships.role.data.attributes.name (not in top-level attributes).
-type GroupMembershipData struct {
-	ID            string                       `json:"id"`
-	Type          string                       `json:"type"`
-	Attributes    GroupMembershipAttributes    `json:"attributes"`
-	Relationships GroupMembershipRelationships `json:"relationships"`
-}
-
-// GroupMembershipAttributes contains created_at; role comes from relationships.role.
-type GroupMembershipAttributes struct {
-	CreatedAt string `json:"created_at"`
-}
-
-// GroupMembershipRelationships holds group, role, and user references.
-type GroupMembershipRelationships struct {
-	Role GroupMembershipRoleRef `json:"role"`
-}
-
-// GroupMembershipRoleRef is the role relationship (data.attributes.name = role name, e.g. "admin").
-type GroupMembershipRoleRef struct {
-	Data *GroupMembershipRoleData `json:"data"`
-}
-
-// GroupMembershipRoleData contains the role id, type, and attributes (name).
-type GroupMembershipRoleData struct {
-	ID         string                  `json:"id"`
-	Type       string                  `json:"type"`
-	Attributes GroupMembershipRoleAttr `json:"attributes"`
-}
-
-// GroupMembershipRoleAttr has the role name ("The name of the role").
-type GroupMembershipRoleAttr struct {
-	Name string `json:"name"`
-}
-
 // OrgMembershipListResponse is the REST API response for GET /orgs/{org_id}/memberships.
 // Matches the JSON: data[] of type "org_membership" with relationships org, user, role.
 type OrgMembershipListResponse struct {
@@ -210,4 +168,24 @@ type OrgMembershipRefData struct {
 	ID         string                 `json:"id"`
 	Type       string                 `json:"type"`
 	Attributes map[string]interface{} `json:"attributes,omitempty"`
+}
+
+// ServiceAccountListResponse is the REST API response for listing service accounts.
+type ServiceAccountListResponse struct {
+	Data []ServiceAccountData `json:"data"`
+}
+
+// ServiceAccountData is a single service account in the REST API response.
+type ServiceAccountData struct {
+	ID         string              `json:"id"`
+	Type       string              `json:"type"`
+	Attributes ServiceAccountAttrs `json:"attributes"`
+}
+
+// ServiceAccountAttrs contains the service account attributes from the REST API.
+type ServiceAccountAttrs struct {
+	Name     string `json:"name"`
+	AuthType string `json:"auth_type"`
+	Level    string `json:"level"` // "Group" or "Org"
+	RoleID   string `json:"role_id"`
 }
