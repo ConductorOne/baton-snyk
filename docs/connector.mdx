@@ -33,7 +33,6 @@ A user with access to a service or user account in Snyk with **Group Admin** per
 
 If you want to provision invitations using ConductorOne, the account used to generate the API token must also have the `org.read`, `org.user.read`, and `org.user.invite` permissions.
 
-**Group Admin permissions are also required for service account sync.** The connector calls `GET /groups/{id}/service-accounts` and `GET /orgs/{id}/service-accounts`, both of which require Group Admin scope. Without Group Admin permissions, service accounts will not appear in ConductorOne.
 </Warning>
 
 ### Look up your account's Snyk API token
