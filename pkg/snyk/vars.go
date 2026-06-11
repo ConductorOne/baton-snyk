@@ -28,7 +28,7 @@ func NewPaginationVars(page string, perPage uint) *PaginationVars {
 // Apply adds pagination parameters to the provided URL values.
 func (p *PaginationVars) Apply(params *url.Values) {
 	if p.PerPage > 0 {
-		params.Add("perPage", fmt.Sprintf("%d", p.PerPage))
+		params.Set("perPage", fmt.Sprintf("%d", p.PerPage))
 	}
 }
 

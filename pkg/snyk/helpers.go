@@ -12,6 +12,18 @@ func withQueryParam(u *url.URL, key, value string) {
 	u.RawQuery = q.Encode()
 }
 
+func applyVars(u *url.URL, vars []Vars) {
+	if vars == nil {
+		return
+	}
+
+	query := u.Query()
+	for _, v := range vars {
+		v.Apply(&query)
+	}
+	u.RawQuery = query.Encode()
+}
+
 // parsePageURL parses a full next-page URL string returned in a Link header.
 func parsePageURL(pageToken string) (*url.URL, error) {
 	u, err := url.Parse(pageToken)

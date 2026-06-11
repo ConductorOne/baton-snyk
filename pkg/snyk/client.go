@@ -514,15 +514,7 @@ func (c *Client) delete(ctx context.Context, urlAddress *url.URL) (string, error
 }
 
 func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method string, data interface{}, response interface{}, vars []Vars) (string, error) {
-	if vars != nil {
-		query := url.Values{}
-
-		for _, pgVars := range vars {
-			pgVars.Apply(&query)
-		}
-
-		urlAddress.RawQuery = query.Encode()
-	}
+	applyVars(urlAddress, vars)
 
 	opts := []uhttp.RequestOption{
 		uhttp.WithAcceptJSONHeader(),
@@ -563,15 +555,7 @@ func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method stri
 }
 
 func (c *Client) doRestRequest(ctx context.Context, urlAddress *url.URL, method string, data interface{}, response interface{}, vars []Vars) (string, error) {
-	if vars != nil {
-		query := url.Values{}
-
-		for _, pgVars := range vars {
-			pgVars.Apply(&query)
-		}
-
-		urlAddress.RawQuery = query.Encode()
-	}
+	applyVars(urlAddress, vars)
 
 	opts := []uhttp.RequestOption{
 		uhttp.WithHeader("Authorization", fmt.Sprintf("token %s", c.token)),
