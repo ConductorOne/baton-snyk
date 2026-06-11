@@ -1,7 +1,6 @@
 package connector
 
 import (
-	"fmt"
 	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -38,23 +37,31 @@ func parsePageToken(i string, resourceID *v2.ResourceId) (*pagination.Bag, strin
 
 // parseLink returns parsed header representing next page in paginated response.
 func parseLink(link string) (string, error) {
-	parts := strings.Split(link, ";")
-	url := strings.Trim(parts[0], "<>")
+	for _, part := range strings.Split(link, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
 
-	for _, part := range parts[1:] {
-		p := strings.TrimSpace(part)
-		if strings.HasPrefix(p, "rel=") {
-			rel := strings.TrimPrefix(p, "rel=")
-			switch rel {
-			case "last":
-				return "", nil
-			case "next":
-				return url, nil
+		idx := strings.Index(part, ">")
+		if idx < 0 {
+			continue
+		}
+
+		linkURL := strings.Trim(strings.TrimSpace(part[:idx+1]), "<>")
+		for _, param := range strings.Split(part[idx+1:], ";") {
+			p := strings.TrimSpace(param)
+			if !strings.HasPrefix(strings.ToLower(p), "rel=") {
+				continue
+			}
+			rel := strings.Trim(strings.TrimSpace(strings.TrimPrefix(p, "rel=")), `"'`)
+			if rel == "next" {
+				return linkURL, nil
 			}
 		}
 	}
 
-	return url, fmt.Errorf("no next link found in header")
+	return "", nil
 }
 
 // parseRestNextLink extracts the next page URL from a REST API Link header.
