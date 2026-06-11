@@ -54,7 +54,7 @@ func parseLink(link string) (string, error) {
 			if !strings.HasPrefix(strings.ToLower(p), "rel=") {
 				continue
 			}
-			rel := strings.Trim(strings.TrimSpace(strings.TrimPrefix(p, "rel=")), `"'`)
+			rel := strings.Trim(strings.TrimSpace(p[len("rel="):]), `"'`)
 			if rel == "next" {
 				return linkURL, nil
 			}

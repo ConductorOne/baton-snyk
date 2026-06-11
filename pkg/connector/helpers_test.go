@@ -25,6 +25,11 @@ func TestParseLink(t *testing.T) {
 			link: `<https://app.snyk.io/api/v1/group/group-id/orgs?page=2&perPage=50>; rel=next`,
 			want: "https://app.snyk.io/api/v1/group/group-id/orgs?page=2&perPage=50",
 		},
+		{
+			name: "mixed-case rel parameter",
+			link: `<https://app.snyk.io/api/v1/group/group-id/orgs?page=2&perPage=50>; Rel="next"`,
+			want: "https://app.snyk.io/api/v1/group/group-id/orgs?page=2&perPage=50",
+		},
 	}
 
 	for _, tt := range tests {
