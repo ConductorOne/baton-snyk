@@ -52,6 +52,7 @@ var (
 				},
 			},
 			&v2.SkipEntitlementsAndGrants{},
+			&v2.SkipSyncAnomalyDetection{},
 		),
 	}
 )
