@@ -52,9 +52,8 @@ func groupResource(_ context.Context, group *snyk.Group) (*v2.Resource, error) {
 		group.Name,
 		groupResourceType,
 		group.ID,
-		[]rs.GroupTraitOption{
-			rs.WithGroupProfile(profile),
-		},
+		[]rs.GroupTraitOption{},
+		rs.WithResourceProfile(profile),
 		rs.WithAnnotation(
 			&v2.ChildResourceType{ResourceTypeId: orgResourceType.Id},
 			&v2.ChildResourceType{ResourceTypeId: userResourceType.Id},
