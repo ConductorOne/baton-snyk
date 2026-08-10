@@ -31,7 +31,9 @@ func userResource(user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, 
 		rs.WithUserLogin(user.Email),
 	}
 
-	resourceOptions := []rs.ResourceOption{}
+	resourceOptions := []rs.ResourceOption{
+		rs.WithResourceProfile(profile),
+	}
 	if parentID != nil {
 		resourceOptions = append(resourceOptions, rs.WithParentResourceID(parentID))
 	}
@@ -41,7 +43,7 @@ func userResource(user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, 
 		userResourceType,
 		user.ID,
 		userTraitOptions,
-		append(resourceOptions, rs.WithResourceProfile(profile))...,
+		resourceOptions...,
 	)
 	if err != nil {
 		return nil, err
