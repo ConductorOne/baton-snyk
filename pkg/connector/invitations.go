@@ -168,13 +168,14 @@ func createInvitationResource(invite *snyk.InviteResponseData, orgID string, par
 	}
 
 	userTraitOptions := []rs.UserTraitOption{
-		rs.WithUserProfile(profile),
 		rs.WithEmail(invite.Attributes.Email, true),
 		rs.WithUserLogin(invite.Attributes.Email),
-		rs.WithStatus(v2.UserTrait_Status_STATUS_ENABLED),
 	}
 
-	resourceOptions := []rs.ResourceOption{}
+	resourceOptions := []rs.ResourceOption{
+		rs.WithResourceProfile(profile),
+		rs.WithResourceStatus(v2.Status_RESOURCE_STATUS_ENABLED, ""),
+	}
 	if parentID != nil {
 		resourceOptions = append(resourceOptions, rs.WithParentResourceID(parentID))
 	}

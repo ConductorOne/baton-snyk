@@ -26,12 +26,12 @@ func serviceAccountResource(sa *snyk.ServiceAccountData, parentID *v2.ResourceId
 		sa.ID,
 		[]rs.UserTraitOption{
 			rs.WithAccountType(v2.UserTrait_ACCOUNT_TYPE_SERVICE),
-			rs.WithStatus(v2.UserTrait_Status_STATUS_ENABLED),
-			rs.WithUserProfile(map[string]interface{}{
-				"auth_type": sa.Attributes.AuthType,
-				"level":     sa.Attributes.Level,
-			}),
 		},
+		rs.WithResourceStatus(v2.Status_RESOURCE_STATUS_ENABLED, ""),
+		rs.WithResourceProfile(map[string]interface{}{
+			"auth_type": sa.Attributes.AuthType,
+			"level":     sa.Attributes.Level,
+		}),
 		rs.WithParentResourceID(parentID),
 		rs.WithExternalID(&v2.ExternalId{Id: sa.ID}),
 	)
@@ -106,7 +106,6 @@ func (s *serviceAccountBuilder) List(ctx context.Context, parentResourceID *v2.R
 
 	return rv, nextToken, nil, nil
 }
-
 
 // Entitlements always returns an empty slice for service accounts.
 // The serviceAccountResourceType is annotated with SkipEntitlementsAndGrants so the SDK skips these calls.

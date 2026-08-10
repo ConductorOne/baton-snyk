@@ -27,12 +27,13 @@ func userResource(user *snyk.GroupUser, parentID *v2.ResourceId) (*v2.Resource, 
 	}
 
 	userTraitOptions := []rs.UserTraitOption{
-		rs.WithUserProfile(profile),
 		rs.WithEmail(user.Email, true),
 		rs.WithUserLogin(user.Email),
 	}
 
-	resourceOptions := []rs.ResourceOption{}
+	resourceOptions := []rs.ResourceOption{
+		rs.WithResourceProfile(profile),
+	}
 	if parentID != nil {
 		resourceOptions = append(resourceOptions, rs.WithParentResourceID(parentID))
 	}
