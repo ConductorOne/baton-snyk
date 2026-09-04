@@ -30,7 +30,7 @@ baton resources
 ## docker
 
 ```
-docker run --rm -v $(pwd):/out -e BATON_GROUP_ID=group_id BATON_API_TOKEN=api_token ghcr.io/conductorone/baton-snyk:latest -f "/out/sync.c1z"
+docker run --rm -v $(pwd):/out -e BATON_GROUP_ID=group_id BATON_API_TOKEN=api_token public.ecr.aws/conductorone/baton-snyk:latest -f "/out/sync.c1z"
 docker run --rm -v $(pwd):/out ghcr.io/conductorone/baton:latest -f "/out/sync.c1z" resources
 ```
 
