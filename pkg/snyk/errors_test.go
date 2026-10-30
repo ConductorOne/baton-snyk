@@ -190,14 +190,15 @@ func TestClassifyHTTPError(t *testing.T) {
 	E := errors.New("sentinel")
 	entitlementMsg := "The org 1 is not entitled for api access. Please upgrade your plan."
 	tests := []struct {
-		name      string
-		resp      *http.Response
-		errResp   *ErrorResp
-		inputErr  error
-		checkIsE  bool
-		checkEnt  bool
-		wantCode  codes.Code
-		checkCode bool
+		name       string
+		resp       *http.Response
+		errResp    *ErrorResp
+		inputErr   error
+		checkIsE   bool
+		checkEnt   bool
+		checkCode  bool
+		checkCause bool
+		wantCode   codes.Code
 	}{
 		{
 			name:     "nil resp pass-through",
@@ -207,13 +208,21 @@ func TestClassifyHTTPError(t *testing.T) {
 			checkIsE: true,
 		},
 		{
-			name:      "entitlement 403",
-			resp:      &http.Response{StatusCode: http.StatusForbidden},
-			errResp:   &ErrorResp{Msg: entitlementMsg},
-			inputErr:  E,
-			checkEnt:  true,
-			checkCode: true,
-			wantCode:  codes.PermissionDenied,
+			name:     "nil errResp pass-through",
+			resp:     &http.Response{StatusCode: http.StatusForbidden},
+			errResp:  nil,
+			inputErr: E,
+			checkIsE: true,
+		},
+		{
+			name:       "entitlement 403",
+			resp:       &http.Response{StatusCode: http.StatusForbidden},
+			errResp:    &ErrorResp{Msg: entitlementMsg},
+			inputErr:   E,
+			checkEnt:   true,
+			checkCode:  true,
+			wantCode:   codes.PermissionDenied,
+			checkCause: true,
 		},
 		{
 			name:     "403 different message",
@@ -252,6 +261,9 @@ func TestClassifyHTTPError(t *testing.T) {
 				var ent *EntitlementError
 				if !errors.As(got, &ent) || ent.UpstreamMessage != entitlementMsg {
 					t.Fatalf("unexpected EntitlementError: %#v", got)
+				}
+				if tt.checkCause && !errors.Is(got, E) {
+					t.Fatalf("original cause must stay reachable via Unwrap, got %#v", got)
 				}
 				if got := status.Code(got); got != codes.PermissionDenied {
 					t.Fatalf("status.Code = %v, want PermissionDenied", got)

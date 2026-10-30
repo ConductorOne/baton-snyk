@@ -21,6 +21,9 @@ var ErrNotEntitledForAPI = errors.New("snyk org is not entitled for API access; 
 type EntitlementError struct {
 	StatusCode      int
 	UpstreamMessage string
+	// Cause is the original transport error built by the vendored uhttp wrapper.
+	// Preserved (not surfaced) so errors.Is/As against the upstream chain stay reachable.
+	Cause error
 }
 
 func (e *EntitlementError) Error() string {
@@ -38,6 +41,10 @@ func (e *EntitlementError) GRPCStatus() *status.Status {
 func (e *EntitlementError) Is(target error) bool {
 	return target == ErrNotEntitledForAPI
 }
+
+// Unwrap exposes the original uhttp transport error without changing the
+// surfaced message or the PermissionDenied gRPC code.
+func (e *EntitlementError) Unwrap() error { return e.Cause }
 
 // classifyHTTPError reclassifies the transport-level error built by the vendored uhttp
 // wrapper. It fires ONLY on HTTP 403 whose parsed error body says the org is not
@@ -57,5 +64,6 @@ func (c *Client) classifyHTTPError(ctx context.Context, resp *http.Response, err
 	return &EntitlementError{
 		StatusCode:      resp.StatusCode,
 		UpstreamMessage: errResp.Msg,
+		Cause:           err,
 	}
 }

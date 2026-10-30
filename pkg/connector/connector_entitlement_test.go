@@ -2,11 +2,13 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/conductorone/baton-snyk/pkg/snyk"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -54,5 +56,8 @@ func TestValidateEntitlementError(t *testing.T) {
 	}
 	if got := status.Code(err); got != codes.PermissionDenied {
 		t.Fatalf("status.Code = %v, want PermissionDenied", got)
+	}
+	if !errors.Is(err, snyk.ErrNotEntitledForAPI) {
+		t.Fatalf("expected ErrNotEntitledForAPI through the Validate wrap, got: %v", err)
 	}
 }
