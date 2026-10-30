@@ -63,7 +63,7 @@ func TestErrorRespUnmarshalJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var resp ErrorResp
-			if err := jsonUnmarshal(t, tt.body, &resp); err != nil {
+			if err := json.Unmarshal([]byte(tt.body), &resp); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
 			if resp.Err != tt.wantErr {
@@ -85,15 +85,49 @@ func TestErrorRespUnmarshalJSON(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var resp ErrorResp
-			if err := jsonUnmarshal(t, tc.body, &resp); err == nil {
+			if err := json.Unmarshal([]byte(tc.body), &resp); err == nil {
 				t.Fatalf("expected non-nil unmarshal error for %s", tc.body)
 			}
 		})
 	}
 }
 
-func jsonUnmarshal(_ *testing.T, body string, v interface{}) error {
-	return json.Unmarshal([]byte(body), v)
+// TestDoRestRequestEntitlementClassification pins the classification wiring at the
+// second transport return (client.go doRestRequest) via a REST API path.
+func TestDoRestRequestEntitlementClassification(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/orgs/org-id/memberships" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":true,"message":"The org org-id is not entitled for api access. Please upgrade your plan."}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(context.Background(), "group-id", "token", BaseHost, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = client.ListOrgMemberships(context.Background(), "org-id", "")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !errors.Is(err, ErrNotEntitledForAPI) {
+		t.Fatalf("expected ErrNotEntitledForAPI, got: %v", err)
+	}
+	if got := status.Code(err); got != codes.PermissionDenied {
+		t.Fatalf("status.Code = %v, want PermissionDenied", got)
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "failed to unmarshal JSON error response") || strings.Contains(msg, "cannot unmarshal bool") {
+		t.Fatalf("unmarshal fragments must be gone, got: %v", msg)
+	}
+	if !strings.Contains(msg, "not entitled for API access") || !strings.Contains(msg, "Please upgrade your plan.") {
+		t.Fatalf("error should carry the entitlement reason + upstream message, got: %v", msg)
+	}
 }
 
 func TestErrorRespMessage(t *testing.T) {
@@ -164,7 +198,6 @@ func TestClassifyHTTPError(t *testing.T) {
 		checkEnt  bool
 		wantCode  codes.Code
 		checkCode bool
-		wantPassT bool
 	}{
 		{
 			name:     "nil resp pass-through",
@@ -265,6 +298,15 @@ func TestClassifyHTTPErrorWarnLog(t *testing.T) {
 	}
 	if fields["group_id"] != "group-1" {
 		t.Fatalf("group_id field = %#v", fields["group_id"])
+	}
+	// I6: no token, no body dump — exactly the two sanctioned fields.
+	if len(fields) != 2 {
+		t.Fatalf("expected exactly 2 log fields, got %d: %#v", len(fields), fields)
+	}
+	for _, forbidden := range []string{"token", "authorization", "body", "message"} {
+		if _, ok := fields[forbidden]; ok {
+			t.Fatalf("log must not contain %q field", forbidden)
+		}
 	}
 	for _, e := range core.entries {
 		if e.Level >= zapcore.ErrorLevel {
