@@ -1,6 +1,9 @@
 package snyk
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // BaseResource represents a resource with an ID field.
 type BaseResource struct {
@@ -82,9 +85,40 @@ type ErrorResp struct {
 	Msg string `json:"message"`
 }
 
+// UnmarshalJSON tolerates Snyk's bool "error" field: {"error":true,"message":"..."}.
+// A JSON string is stored in Err exactly as before; bool/absent/null leave Err empty;
+// any other JSON type still returns the unmarshal error.
+func (e *ErrorResp) UnmarshalJSON(data []byte) error {
+	type alias ErrorResp
+	aux := struct {
+		Err json.RawMessage `json:"error"`
+		*alias
+	}{alias: (*alias)(e)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	e.Err = ""
+	if len(aux.Err) > 0 && string(aux.Err) != "null" {
+		var s string
+		if err := json.Unmarshal(aux.Err, &s); err == nil {
+			e.Err = s
+		} else {
+			var b bool
+			if err := json.Unmarshal(aux.Err, &b); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Message returns a formatted error message.
 func (e *ErrorResp) Message() string {
-	return fmt.Sprintf("unexpected error from snyk api: %s, %v", e.Err, e.Msg)
+	msg := fmt.Sprintf("unexpected error from snyk api: %s", e.Msg)
+	if e.Err != "" {
+		msg = fmt.Sprintf("unexpected error from snyk api: %s, %s", e.Err, e.Msg)
+	}
+	return msg
 }
 
 // InviteRequest represents the request body for inviting a user to an organization.
