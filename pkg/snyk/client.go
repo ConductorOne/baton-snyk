@@ -541,7 +541,7 @@ func (c *Client) doRequest(ctx context.Context, urlAddress *url.URL, method stri
 
 	resp, err := c.httpClient.Do(req, doOpts...)
 	if err != nil {
-		return "", err
+		return "", c.classifyHTTPError(ctx, resp, errResp, err)
 	}
 
 	defer func() {
@@ -582,7 +582,7 @@ func (c *Client) doRestRequest(ctx context.Context, urlAddress *url.URL, method 
 
 	resp, err := c.httpClient.Do(req, doOpts...)
 	if err != nil {
-		return "", err
+		return "", c.classifyHTTPError(ctx, resp, errResp, err)
 	}
 
 	defer func() {
